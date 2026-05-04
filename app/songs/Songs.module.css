@@ -1,0 +1,91 @@
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 60px 20px;
+  min-height: 100vh;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  color: #9ca3af;
+  margin-bottom: 40px;
+  font-size: 16px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateX(4px);
+}
+
+.songInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.songTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f3f4f6;
+  transition: color 0.2s;
+}
+
+.card:hover .songTitle {
+  color: #60a5fa;
+}
+
+.songAuthor {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.arrow {
+  color: #374151;
+  font-size: 20px;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.card:hover .arrow {
+  color: #60a5fa;
+  transform: translateX(4px);
+}
+
+/* Стили для пустого состояния */
+.empty {
+  text-align: center;
+  padding: 80px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 24px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.empty p {
+  color: #6b7280;
+  margin-bottom: 20px;
+}
