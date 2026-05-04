@@ -1,65 +1,116 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+
+// Массив всех нот для математики транспонирования
+const ALL_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+// Наш тестовый текст песни с аккордами в скобках
+const SONG_TEXT = `[Em]Ти благий, і [C]милість Твоя
+[G]Навіки, [D]навіки.
+[Em]Славимо [C]Твоє Ім'я,
+[G]Навіки, [D]навіки.
+
+[Em]Бог могутній, [C]Ти зі мною,
+[G]Твоя любов [D]як ріка.
+[Em]В Тобі маю [C]я надію,
+[G]Скеля моя [D]Ти міцна.`;
+
+export default function SongPage() {
+  const [transposeStep, setTransposeStep] = useState(0);
+
+  // Функция для сдвига аккорда
+  const transposeChord = (chord: string) => {
+    // Находим основную ноту аккорда (например, "C#" из "C#m")
+    const match = chord.match(/^[A-G]#?/);
+    if (!match) return chord;
+
+    const root = match[0];
+    const suffix = chord.slice(root.length); // Окончание аккорда (m, 7, sus4 и т.д.)
+
+    const index = ALL_NOTES.indexOf(root);
+    if (index === -1) return chord;
+
+    // Считаем новую ноту (с учетом перехода через край массива)
+    let newIndex = (index + transposeStep) % 12;
+    if (newIndex < 0) newIndex += 12;
+
+    return ALL_NOTES[newIndex] + suffix;
+  };
+
+  // Функция для рендеринга строки текста с аккордами над словами
+  const renderLine = (line: string, lineIndex: number) => {
+    if (!line.trim()) return <div key={lineIndex} className="h-6"></div>; // Пустая строка
+
+    // Разбиваем строку по аккордам
+    const parts = line.split(/(\[[^\]]+\])/g);
+    const pairs = [];
+    let currentChord = "";
+
+    parts.forEach((part) => {
+      if (part.startsWith("[") && part.endsWith("]")) {
+        currentChord = part.slice(1, -1);
+      } else {
+        pairs.push({ chord: currentChord, text: part });
+        currentChord = ""; 
+      }
+    });
+
+    return (
+      <div key={lineIndex} className="flex flex-wrap items-end mb-2 text-lg sm:text-xl">
+        {pairs.map((pair, index) => (
+          <div key={index} className="flex flex-col">
+            <span className="text-blue-400 font-bold h-6 text-base sm:text-lg select-none">
+              {pair.chord ? transposeChord(pair.chord) : " "}
+            </span>
+            <span className="whitespace-pre text-gray-200">{pair.text}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-[#111111] text-white p-4 sm:p-12 font-sans selection:bg-blue-500/30">
+      <div className="max-w-2xl mx-auto">
+        
+        {/* Шапка */}
+        <div className="mb-6 mt-8 sm:mt-0">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Ти благий</h1>
+          <p className="text-gray-400 flex items-center gap-2">
+            Тональність: <span className="font-bold text-white bg-gray-800 px-2 py-1 rounded">{transposeChord("Em")}</span>
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* Панель управления транспонированием */}
+        <div className="flex flex-wrap items-center gap-3 bg-gray-900/80 p-4 rounded-2xl mb-8 border border-gray-800 shadow-lg">
+          <span className="text-gray-400 font-medium text-sm sm:text-base mr-2">Транспонування:</span>
+          
+          <button 
+            onClick={() => setTransposeStep((prev) => prev - 1)}
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl transition-all active:scale-95 font-bold"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            -1
+          </button>
+          
+          <span className="w-8 text-center font-bold text-lg">
+            {transposeStep > 0 ? `+${transposeStep}` : transposeStep}
+          </span>
+          
+          <button 
+            onClick={() => setTransposeStep((prev) => prev + 1)}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl transition-all active:scale-95 font-bold shadow-[0_0_15px_rgba(37,99,235,0.3)]"
           >
-            Documentation
-          </a>
+            +1
+          </button>
         </div>
-      </main>
-    </div>
+
+        {/* Текст песни */}
+        <div className="bg-[#1a1a1a] p-6 sm:p-10 rounded-3xl shadow-2xl leading-relaxed border border-gray-800/50">
+          {SONG_TEXT.split('\n').map((line, i) => renderLine(line, i))}
+        </div>
+
+      </div>
+    </main>
   );
 }
