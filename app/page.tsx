@@ -27,9 +27,9 @@ export default function HomePage() {
       {/* Блок с карточками для навигации */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
         
-        <a href="/song" className="bg-[#1a1a1a] p-6 rounded-2xl border border-gray-800 hover:border-blue-500/50 transition-all group">
-          <h3 className="text-xl font-bold mb-2 group-hover:text-blue-400 transition-colors">Тестова пісня →</h3>
-          <p className="text-gray-500 text-sm">Перейти до нашого MVP: текст з акордами та робоче транспонування.</p>
+        <a href="/song/1" className="bg-[#1a1a1a] p-6 rounded-2xl border border-gray-800 hover:border-blue-500/50 transition-all group">
+          <h3 className="text-xl font-bold mb-2 group-hover:text-blue-400 transition-colors">Переглянути пісню →</h3>
+          <p className="text-gray-500 text-sm">Відкрити першу пісню безпосередньо з бази даних Supabase.</p>
         </a>
 
         <a href="/setlists" className="bg-[#1a1a1a] p-6 rounded-2xl border border-gray-800 hover:border-blue-500/50 transition-all group">
