@@ -44,7 +44,7 @@ export default function SongPage() {
 
     // Разбиваем строку по аккордам
     const parts = line.split(/(\[[^\]]+\])/g);
-    const pairs = [];
+    const pairs: { chord: string; text: string }[] = [];
     let currentChord = "";
 
     parts.forEach((part) => {
