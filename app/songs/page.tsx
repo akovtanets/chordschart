@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import styles from "./Songs.module.css";
 
+export const dynamic = "force-dynamic";
+
 export default function SongsPage() {
   const searchParams = useSearchParams();
   const query = searchParams.get("search");
