@@ -32,8 +32,8 @@ export default function RootLayout({
               <nav className="hidden md:block">
                 <ul className="flex items-center space-x-8">
                   <li><a href="/" className="text-gray-300 hover:text-white transition-colors">Головна</a></li>
-                  <li><a href="#" className="text-gray-300 hover:text-white transition-colors">Сетлісти</a></li>
-                  <li><a href="#" className="text-gray-300 hover:text-white transition-colors">Команди</a></li>
+                  <li><a href="/setlists" className="text-gray-300 hover:text-white transition-colors">Сетлісти</a></li>
+                  <li><a href="/teams" className="text-gray-300 hover:text-white transition-colors">Команди</a></li>
                   <li><a href="#" className="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-xl font-medium transition-all shadow-[0_0_10px_rgba(37,99,235,0.2)]">Увійти</a></li>
                 </ul>
               </nav>
