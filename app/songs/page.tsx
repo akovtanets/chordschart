@@ -1,13 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, Suspense } from "react"; // Добавили Suspense
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import styles from "./Songs.module.css";
 
-export const dynamic = "force-dynamic";
-
-export default function SongsPage() {
+// 1. Выносим логику списка в отдельный внутренний компонент
+function SongsList() {
   const searchParams = useSearchParams();
   const query = searchParams.get("search");
   const [songs, setSongs] = useState<any[]>([]);
@@ -21,41 +21,39 @@ export default function SongsPage() {
         request = request.or(`title.ilike.%${query}%,author.ilike.%${query}%`);
       }
       const { data } = await request;
-      setSongs(data || []);
+      if (data) setSongs(data);
       setLoading(false);
     };
     fetchSongs();
   }, [query]);
 
-  return (
-    <main className={styles.main}>
-      <h1 className={styles.title}>
-        {query ? `Результати пошуку` : "Усі пісні"}
-      </h1>
-      <p className={styles.subtitle}>
-        {query ? `За запитом "${query}" знайдено ${songs.length}` : `У бібліотеці ${songs.length} пісень`}
-      </p>
+  if (loading) return <div className={styles.loading}>Завантаження...</div>;
 
-      <div className={styles.list}>
-        {loading ? (
-          <p style={{color: '#6b7280'}}>Завантаження...</p>
-        ) : songs.length > 0 ? (
-          songs.map((song) => (
-            <Link key={song.id} href={`/song/${song.id}`} className={styles.card}>
-              <div className={styles.songInfo}>
-                <span className={styles.songTitle}>{song.title}</span>
-                <span className={styles.songAuthor}>{song.author}</span>
-              </div>
-              <div className={styles.arrow}>→</div>
-            </Link>
-          ))
-        ) : (
-          <div className={styles.empty}>
-            <p>На жаль, ми нічого не знайшли</p>
-            <Link href="/songs" style={{color: '#3b82f6', textDecoration: 'none'}}>Скинути пошук</Link>
-          </div>
-        )}
-      </div>
-    </main>
+  return (
+    <div className={styles.grid}>
+      {songs.map((song) => (
+        <Link href={`/song/${song.id}`} key={song.id} className={styles.card}>
+          <h3>{song.title}</h3>
+          <p>{song.author}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// 2. Основной компонент страницы просто оборачивает список в Suspense
+export default function SongsPage() {
+  return (
+    <div className={styles.container}>
+      <h1 className={styles.title}>Всі пісні</h1>
+      
+      {/* 
+        Это критически важная обертка для Vercel. 
+        Она говорит: "Если данные еще не готовы, покажи этот fallback" 
+      */}
+      <Suspense fallback={<div>Завантаження пошуку...</div>}>
+        <SongsList />
+      </Suspense>
+    </div>
   );
 }
