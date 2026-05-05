@@ -2,98 +2,171 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import YouTubePlayer from "@/components/YouTubePlayer";
 
-const notes = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "H"];
+// Используем только бемоли согласно твоим требованиям
+const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
-export default function SongView({ songId }: { songId: number }) {
-  const [song, setSong] = useState<any>(null);
+interface SongViewProps {
+  songId: number;
+  initialContent: string;
+  setlistId?: number | null;
+  youtubeUrl?: string | null;
+  bpm?: number | string | null;
+  originalKey?: string | null;
+}
+
+export default function SongView({ 
+  songId, 
+  initialContent, 
+  setlistId = null, 
+  youtubeUrl = null,
+  bpm = null,
+  originalKey = null
+}: SongViewProps) {
   const [semitones, setSemitones] = useState(0);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchSong() {
-      const { data } = await supabase
-        .from("songs")
-        .select("*")
-        .eq("id", songId)
-        .single();
-      if (data) setSong(data);
-    }
-    if (songId) fetchSong();
-  }, [songId]);
+    const initSettings = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (currentUser && setlistId) {
+        const { data } = await supabase
+          .from("user_song_settings")
+          .select("transposition_offset")
+          .eq("setlist_id", setlistId)
+          .eq("song_id", songId)
+          .maybeSingle();
+
+        if (data) setSemitones(data.transposition_offset);
+      }
+      setLoading(false);
+    };
+    initSettings();
+  }, [songId, setlistId]);
+
+  const saveSettings = async (offset: number) => {
+    if (!user || !setlistId) return;
+    await supabase.from("user_song_settings").upsert({
+      user_id: user.id,
+      setlist_id: setlistId,
+      song_id: songId,
+      transposition_offset: offset,
+    }, { onConflict: "user_id,setlist_id,song_id" });
+  };
 
   const transposeChord = (chord: string, delta: number) => {
-    return chord.replace(/[A-H][#b]?/g, (match) => {
-      let note = match;
-      if (note === "C#") note = "Db";
-      if (note === "D#") note = "Eb";
-      if (note === "F#") note = "Gb";
-      if (note === "G#") note = "Ab";
-      if (note === "A#") note = "Bb";
-      const index = notes.indexOf(note);
+    return chord.replace(/([A-G][b#]?)/g, (match) => {
+      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab");
+      const index = NOTES.indexOf(note);
       if (index === -1) return match;
-      const newIndex = (index + delta + 12) % 12;
-      return notes[newIndex];
+      const newIndex = (index + delta + 120) % 12;
+      return NOTES[newIndex];
     });
   };
 
-  const renderContent = (content: string) => {
-    const parts = content.split(/(\[[^\]]+\])/g);
-    return parts.map((part, i) => {
-      if (part.startsWith("[") && part.endsWith("]")) {
-        const chord = part.slice(1, -1);
-        return (
-          <span key={i} className="relative inline-block w-0 overflow-visible pointer-events-none">
-            <span 
-              className="absolute font-bold text-blue-400 select-none" 
-              style={{ 
-                bottom: '1.2em', // Опустили аккорд ближе к тексту (было 1.8)
-                left: '0',
-                fontSize: '0.8em',
-                whiteSpace: 'nowrap',
-                lineHeight: '1',
-              }}
-            >
-              {transposeChord(chord, semitones)}
-            </span>
-          </span>
-        );
-      }
-      return <span key={i}>{part}</span>;
-    });
+  const parseLine = (line: string) => {
+    let chordLine = "";
+    let textLine = "";
+    let lastChordEndPos = 0;
+    const regex = /\[(.*?)\]/g;
+    let match;
+
+    while ((match = regex.exec(line)) !== null) {
+      const transposed = transposeChord(match[1], semitones);
+      const textBefore = line.substring(lastChordEndPos, match.index).replace(/\[.*?\]/g, "");
+      const currentPosInText = textLine.length + textBefore.length;
+      const spacesNeeded = currentPosInText - chordLine.length;
+      chordLine += " ".repeat(Math.max(0, spacesNeeded)) + transposed;
+      lastChordEndPos = match.index + match[0].length;
+      textLine += textBefore;
+    }
+    textLine += line.substring(lastChordEndPos).replace(/\[.*?\]/g, "");
+
+    return (
+      <div key={Math.random()} className="mb-2 min-h-[2.5rem]">
+        <div className="text-blue-400 font-bold whitespace-pre font-mono leading-none">{chordLine || " "}</div>
+        <div className="text-white whitespace-pre font-mono leading-none">{textLine || " "}</div>
+      </div>
+    );
   };
 
-  if (!song) return <div className="p-20 text-center text-gray-500 font-mono">Завантаження...</div>;
+  const handleTranspose = (delta: number) => {
+    const newOffset = semitones + delta;
+    setSemitones(newOffset);
+    saveSettings(newOffset);
+  };
+
+  if (loading) return <div className="p-8 text-gray-500 bg-black h-full">Завантаження...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-[#0a0a0a] min-h-screen text-white">
-      {/* Шапка */}
-      <div className="flex justify-between items-center mb-10 border-b border-gray-900 pb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-1">{song.title}</h1>
-          <p className="text-lg text-gray-500 italic">{song.author}</p>
-        </div>
+    <div className="flex flex-col h-full bg-black text-white">
+      {/* ВЕРХНЯЯ ПАНЕЛЬ */}
+      <div className="flex items-center gap-6 p-4 bg-[#111] border-b border-gray-800 h-20">
         
-        <div className="flex items-center gap-1 bg-gray-900/80 p-1 rounded-xl border border-gray-800">
-          <button onClick={() => setSemitones(s => s - 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-800 rounded-lg transition-colors">b</button>
-          <div className="w-10 text-center font-mono font-bold text-blue-500">{semitones}</div>
-          <button onClick={() => setSemitones(s => s + 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-800 rounded-lg transition-colors">#</button>
+        {/* Блок управления тональностью и инфо */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleTranspose(-1)} className="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700 flex items-center justify-center text-xl">-</button>
+            <div className="text-center min-w-[50px]">
+              <p className="text-[9px] text-gray-500 uppercase leading-tight">Тональність</p>
+              <p className="font-bold font-mono text-sm">{semitones > 0 ? `+${semitones}` : semitones}</p>
+            </div>
+            <button onClick={() => handleTranspose(1)} className="w-10 h-10 bg-gray-800 rounded-lg hover:bg-gray-700 flex items-center justify-center text-xl">+</button>
+          </div>
+
+          {/* BPM и Оригинальная тональность (если есть в базе) */}
+          {(bpm || originalKey) && (
+            <div className="hidden sm:flex border-l border-gray-700 pl-4 gap-4">
+              {bpm && (
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase leading-tight">BPM</p>
+                  <p className="font-mono text-sm font-bold">{bpm}</p>
+                </div>
+              )}
+              {originalKey && (
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase leading-tight">Key</p>
+                  <p className="font-mono text-sm font-bold">{originalKey}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ПЛЕЕР НА ВСЮ ОСТАВШУЮСЯ ШИРИНУ */}
+        <div className="flex-1">
+          {youtubeUrl ? (
+            <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
+          ) : (
+            <div className="h-12 border border-dashed border-gray-800 rounded-lg flex items-center justify-center text-gray-700 text-xs">
+              YouTube link not provided
+            </div>
+          )}
+        </div>
+
+        {/* Кнопка сброса */}
+        {semitones !== 0 && (
+          <button 
+            onClick={() => { setSemitones(0); saveSettings(0); }} 
+            className="text-[9px] text-gray-500 hover:text-white underline uppercase flex-shrink-0"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+
+      {/* ТЕКСТ ПЕСНИ */}
+      <div className="p-6 overflow-y-auto flex-1">
+        <div className="max-w-4xl mx-auto">
+          {(initialContent || "").split("\n").map(line => parseLine(line))}
         </div>
       </div>
-
-      {/* Контент с уменьшенными параметрами */}
-      <div className="relative">
-        <pre 
-          className="whitespace-pre-wrap font-mono text-base md:text-lg text-gray-200 px-2"
-          style={{ 
-            lineHeight: '2.2', // Уменьшили в два раза (было 4.2)
-            letterSpacing: '0.01em'
-          }}
-        >
-          {renderContent(song.content)}
-        </pre>
-      </div>
-
-      <div className="h-40" />
     </div>
   );
 }

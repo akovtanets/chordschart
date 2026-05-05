@@ -1,192 +1,186 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase";
-import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import YouTubePlayer from "@/components/YouTubePlayer";
 
-// Бемольная сетка нот (без диезов)
-const ALL_NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+export default function SongPage({ params }: { params: Promise<{ id: string }> }) {
+  const unwrappedParams = use(params);
+  const id = unwrappedParams.id;
+  const router = useRouter();
 
-export default function SongPage() {
-  const params = useParams();
   const [song, setSong] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [transposeStep, setTransposeStep] = useState(0);
+  const [offset, setOffset] = useState(0);
+
+  // Список нот: бемоли с маленькой 'b'
+  const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
   useEffect(() => {
-    async function fetchSong() {
-      try {
-        setLoading(true);
-        if (!params.id) return;
+    const fetchSong = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("songs")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-        const { data, error } = await supabase
-          .from("songs")
-          .select("*")
-          .eq("id", params.id)
-          .single();
-
-        if (error) throw error;
+      if (data) {
         setSong(data);
-      } catch (error) {
-        console.error("Помилка при завантаженні пісні:", error);
-      } finally {
-        setLoading(false);
       }
-    }
-
-    fetchSong();
-  }, [params.id]);
-
-  const transposeChord = (chord: string) => {
-    if (!chord || chord === "—") return chord;
-
-    // Регулярное выражение ищет основную ноту (A-G) и возможный знак (# или b)
-    const match = chord.match(/^([A-G][#b]?)/);
-    if (!match) return chord;
-
-    const root = match[1]; 
-    const suffix = chord.slice(root.length); // Сохраняем минор, септаккорды и т.д. (m, 7, sus4)
-
-    // Словарь для нормализации (если в базе есть диезы, переводим в бемоли для массива)
-    const sharpToFlat: { [key: string]: string } = {
-      "C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"
+      setLoading(false);
     };
 
-    const normalizedRoot = sharpToFlat[root] || root;
-    const index = ALL_NOTES.indexOf(normalizedRoot);
+    fetchSong();
+  }, [id]);
 
-    if (index === -1) return chord;
+  const handleIncrement = () => setOffset((prev) => prev + 1);
+  const handleDecrement = () => setOffset((prev) => prev - 1);
+  const handleReset = () => setOffset(0);
 
-    // Вычисляем новый индекс с учетом шага транспозиции
-    let newIndex = (index + transposeStep) % 12;
-    if (newIndex < 0) newIndex += 12;
+  const transposeChord = (chord: string, delta: number) => {
+    return chord.replace(/([A-G][b#]?)/g, (match) => {
+      // Приводим к стандарту массива (заменяем диезы и возможные BB на Bb)
+      let note = match
+        .replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab")
+        .replace("BB", "Bb").replace("DB", "Db").replace("EB", "Eb").replace("GB", "Gb").replace("AB", "Ab");
 
-    return ALL_NOTES[newIndex] + suffix;
+      const index = NOTES.indexOf(note);
+      if (index === -1) return match;
+
+      const newIndex = (index + delta + 120) % 12;
+      return NOTES[newIndex]; 
+    });
   };
 
-  const renderLine = (line: string, lineIndex: number) => {
-    // Если строка пустая, возвращаем отступ
-    if (!line.trim()) return <div key={lineIndex} className="h-6"></div>;
+  const parseLine = (line: string) => {
+    let chordLine = "";
+    let textLine = "";
+    let lastChordEndPos = 0;
+    const regex = /\[(.*?)\]/g;
+    let match;
 
-    // Разбиваем строку по квадратным скобкам: [Am] Текст
-    const parts = line.split(/(\[[^\]]+\])/g);
-    const pairs: { chord: string; text: string }[] = [];
-    let currentChord = "";
-
-    parts.forEach((part) => {
-      if (part.startsWith("[") && part.endsWith("]")) {
-        currentChord = part.slice(1, -1);
-      } else {
-        pairs.push({ chord: currentChord, text: part });
-        currentChord = ""; 
-      }
-    });
+    while ((match = regex.exec(line)) !== null) {
+      const transposed = transposeChord(match[1], offset);
+      const textBefore = line.substring(lastChordEndPos, match.index).replace(/\[.*?\]/g, "");
+      const currentPosInText = textLine.length + textBefore.length;
+      const spacesNeeded = currentPosInText - chordLine.length;
+      
+      chordLine += " ".repeat(Math.max(0, spacesNeeded)) + transposed;
+      lastChordEndPos = match.index + match[0].length;
+      textLine += textBefore;
+    }
+    textLine += line.substring(lastChordEndPos).replace(/\[.*?\]/g, "");
 
     return (
-      <div key={lineIndex} className="flex flex-wrap items-end mb-2 text-lg sm:text-xl">
-        {pairs.map((pair, index) => (
-          <div key={index} className="flex flex-col">
-            {/* Рендерим аккорд синим цветом сверху */}
-            <span className="text-blue-400 font-bold h-6 text-base sm:text-lg select-none">
-              {pair.chord ? transposeChord(pair.chord) : " "}
-            </span>
-            {/* Рендерим текст под аккордом */}
-            <span className="whitespace-pre text-gray-200">{pair.text}</span>
-          </div>
-        ))}
+      <div key={Math.random()} className="mb-2 min-h-[2.5rem]">
+        <div className="text-blue-400 font-bold whitespace-pre font-mono leading-none">
+          {chordLine || " "}
+        </div>
+        <div className="text-white whitespace-pre font-mono leading-none">
+          {textLine || " "}
+        </div>
       </div>
     );
   };
 
-  if (loading) return <div className="p-12 text-center text-gray-400">Завантаження пісні...</div>;
-  if (!song) return <div className="p-12 text-center text-red-400">Пісню не знайдено.</div>;
+  if (loading) return <div className="min-h-screen bg-black text-gray-500 p-10 font-mono text-center uppercase tracking-widest text-xs">Завантаження...</div>;
+  if (!song) return <div className="min-h-screen bg-black text-white p-10 font-mono text-center uppercase tracking-widest text-xs">Пісню не знайдено</div>;
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white p-4 sm:p-12 font-sans selection:bg-blue-500/30">
-      <div className="max-w-4xl mx-auto">
-
+    <div className="min-h-screen bg-black text-white p-4 md:p-8">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* Верхняя навигация */}
         <div className="flex justify-between items-center mb-8">
-          <Link href="/" className="text-gray-500 hover:text-white transition-colors">
-            ← Назад
-          </Link>
-          <Link 
-            href={`/edit-song/${params.id}`}
-            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
-          >
-            <span>✏️</span> Редагувати
-          </Link>
-        </div>
-        {/* Шапка с названием и автором */}
-        <div className="mb-8 mt-4 sm:mt-0">
-          <h1 className="text-4xl sm:text-6xl font-extrabold mb-4 tracking-tight">{song.title}</h1>
-          <p className="text-xl text-gray-400 font-medium">{song.author}</p>
-        </div>
-
-        {/* Карточки с параметрами песни */}
-        <div className="flex flex-wrap gap-3 mb-10">
-          <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl">
-            <span className="text-gray-500 text-[10px] block uppercase tracking-widest mb-1">Тональність</span>
-            <span className="font-bold text-blue-400 text-lg">{transposeChord(song.default_key || "—")}</span>
-          </div>
-          {song.bpm && (
-            <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl">
-              <span className="text-gray-500 text-[10px] block uppercase tracking-widest mb-1">Темп</span>
-              <span className="font-bold text-lg">{song.bpm} <small className="text-xs font-normal text-gray-400">BPM</small></span>
-            </div>
-          )}
-          {song.timesig && (
-            <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl">
-              <span className="text-gray-500 text-[10px] block uppercase tracking-widest mb-1">Розмір</span>
-              <span className="font-bold text-lg">{song.timesig}</span>
-            </div>
-          )}
-          {song.length && (
-            <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl">
-              <span className="text-gray-500 text-[10px] block uppercase tracking-widest mb-1">Тривалість</span>
-              <span className="font-bold text-lg">{song.length}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Инструменты управления (Транспозиция) */}
-        <div className="flex items-center gap-6 bg-blue-600/5 p-5 rounded-3xl mb-10 border border-blue-500/20">
-          <div className="flex flex-col">
-            <span className="text-blue-200/60 text-xs uppercase font-bold tracking-wider mb-2">Транспонувати</span>
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setTransposeStep(p => p - 1)} 
-                className="bg-gray-800 hover:bg-gray-700 w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold transition-all active:scale-90"
-              >
-                –
-              </button>
-              <span className="w-14 text-center font-mono text-2xl font-bold text-blue-400">
-                {transposeStep > 0 ? `+${transposeStep}` : transposeStep}
-              </span>
-              <button 
-                onClick={() => setTransposeStep(p => p + 1)} 
-                className="bg-gray-800 hover:bg-gray-700 w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold transition-all active:scale-90"
-              >
-                +
-              </button>
-            </div>
-          </div>
           <button 
-            onClick={() => setTransposeStep(0)} 
-            className="ml-auto text-sm font-semibold text-blue-400 hover:text-blue-300 bg-blue-400/10 px-4 py-2 rounded-lg transition-colors"
+            onClick={() => router.back()} 
+            className="text-gray-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium"
           >
-            Скинути
+            ← Назад
           </button>
+          <Link 
+            href={`/edit-song/${song.id}`}
+            className="bg-[#1a1d23] hover:bg-gray-700 text-white px-5 py-2 rounded-lg text-sm font-medium border border-gray-800 transition-all shadow-lg"
+          >
+            ✎ Редагувати
+          </Link>
         </div>
 
-        {/* Основной блок с текстом песни */}
-        <div className="bg-[#141414] p-6 sm:p-12 rounded-[40px] shadow-2xl border border-white/5 overflow-x-auto ring-1 ring-white/5">
-          <div className="min-w-max">
-            {song.content.split('\n').map((line: string, i: number) => renderLine(line, i))}
+        {/* Заголовок */}
+        <div className="mb-10">
+          <h1 className="text-5xl md:text-7xl font-black mb-3 tracking-tighter uppercase">{song.title}</h1>
+          <p className="text-2xl text-gray-500 font-medium">{song.author || "Автор не вказаний"}</p>
+        </div>
+
+        {/* Инфо-панели */}
+        <div className="flex flex-wrap gap-4 mb-10">
+          <div className="bg-[#0a0c10] border border-gray-900 p-4 rounded-2xl min-w-[130px] text-center shadow-md">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Тональність</p>
+            {/* УБРАН КЛАСС uppercase, чтобы выводилось Bb вместо BB */}
+            <p className="text-blue-400 font-black text-xl">
+              {song.default_key || "—"}
+            </p>
+          </div>
+          
+          <div className="bg-[#0a0c10] border border-gray-900 p-4 rounded-2xl min-w-[130px] text-center shadow-md">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Темп</p>
+            <p className="font-black text-xl">{song.bpm ? `${song.bpm} BPM` : "—"}</p>
+          </div>
+          
+          <div className="bg-[#0a0c10] border border-gray-900 p-4 rounded-2xl min-w-[130px] text-center shadow-md">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Розмір</p>
+            <p className="font-black text-xl">{song.timesig || "4/4"}</p>
+          </div>
+          
+          <div className="bg-[#0a0c10] border border-gray-900 p-4 rounded-2xl min-w-[130px] text-center shadow-md">
+            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Тривалість</p>
+            <p className="font-black text-xl">{song.length || "—"}</p>
           </div>
         </div>
 
+        {/* ПАНЕЛЬ УПРАВЛЕНИЯ */}
+        <div className="bg-[#0a0c10] border border-gray-800 rounded-3xl p-6 mb-12 shadow-2xl">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-10">
+            
+            <div className="flex-shrink-0">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-4">Транспонувати</p>
+              <div className="flex items-center gap-5">
+                <button onClick={handleDecrement} className="w-14 h-14 bg-[#1a1d23] hover:bg-gray-700 rounded-xl flex items-center justify-center text-3xl border border-gray-800 transition-all active:scale-95">-</button>
+                <span className="text-3xl font-black font-mono w-12 text-center text-blue-400">{offset > 0 ? `+${offset}` : offset}</span>
+                <button onClick={handleIncrement} className="w-14 h-14 bg-[#1a1d23] hover:bg-gray-700 rounded-xl flex items-center justify-center text-3xl border border-gray-800 transition-all active:scale-95">+</button>
+                <button onClick={handleReset} className="ml-2 text-[10px] text-gray-600 hover:text-white underline uppercase font-bold tracking-tighter">Скинути</button>
+              </div>
+            </div>
+
+            <div className="flex-1">
+              <div className="flex justify-between items-end mb-4">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Прослухати</p>
+                {offset !== 0 && (
+                  <div className="px-3 py-1 bg-orange-500/10 border border-orange-500/20 rounded-md text-[9px] text-orange-500 uppercase font-black tracking-tighter">
+                    Звук в оригіналі
+                  </div>
+                )}
+              </div>
+              {song.youtube_url ? (
+                <YouTubePlayer url={song.youtube_url} isFullWidth={true} offset={offset} />
+              ) : (
+                <div className="h-16 border border-dashed border-gray-800 rounded-2xl flex items-center justify-center text-gray-700 text-xs uppercase tracking-widest font-bold">YouTube посилання відсутнє</div>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+        {/* Текст песни */}
+        <div className="bg-[#050505] p-8 md:p-12 rounded-[40px] border border-gray-900 shadow-inner overflow-x-auto">
+          <div className="max-w-none">
+            {song.content?.split("\n").map((line: string) => parseLine(line))}
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
