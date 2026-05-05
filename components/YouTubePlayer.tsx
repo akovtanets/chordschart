@@ -43,19 +43,21 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
     }
   };
 
+  // 1. Ініціалізація плеєра (Запускається лише ОДИН РАЗ)
   useEffect(() => {
     if (!videoId) return;
 
-    if (!(window as any).YT) {
+    if (!(window as any).YT && !document.getElementById("yt-api-script")) {
       const tag = document.createElement("script");
+      tag.id = "yt-api-script";
       tag.src = "https://www.youtube.com/iframe_api";
       document.body.appendChild(tag);
     }
 
     const init = () => {
       new (window as any).YT.Player(playerRef.current, {
-        height: "0",
-        width: "0",
+        height: "1",
+        width: "1",
         videoId: videoId,
         playerVars: {
           autoplay: 0,
@@ -81,17 +83,28 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
     if ((window as any).YT && (window as any).YT.Player) {
       init();
     } else {
-      (window as any).onYouTubeIframeAPIReady = init;
+      if (!(window as any).YT_API_CALLBACKS) {
+        (window as any).YT_API_CALLBACKS = [];
+      }
+      (window as any).YT_API_CALLBACKS.push(init);
+      (window as any).onYouTubeIframeAPIReady = () => {
+        (window as any).YT_API_CALLBACKS.forEach((cb: any) => cb());
+      };
     }
+  }, [videoId]); // <--- ОСЬ ГОЛОВНА ФІШКА: Тепер тут ТІЛЬКИ videoId!
 
+  // 2. Окремий таймер для повзунка (рухається, коли грає музика)
+  useEffect(() => {
     const interval = setInterval(() => {
-      if (player && isPlaying) {
-        setProgress((player.getCurrentTime() / player.getDuration()) * 100);
+      if (player && isPlaying && typeof player.getCurrentTime === 'function') {
+        // Запобіжник, щоб не ділити на нуль
+        const currentDuration = duration || player.getDuration() || 1;
+        setProgress((player.getCurrentTime() / currentDuration) * 100);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [videoId, isPlaying, player]); // videoAuthor убран из зависимостей во избежание ошибок рендера
+  }, [player, isPlaying, duration]); // videoAuthor убран из зависимостей во избежание ошибок рендера
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!player) return;
@@ -99,7 +112,17 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
     player.seekTo(time);
     setProgress(parseFloat(e.target.value));
   };
+  // Слухаємо інші плеєри
+  useEffect(() => {
+    const handleStopOthers = (e: any) => {
+      if (player && e.detail !== videoId && typeof player.pauseVideo === 'function') {
+        player.pauseVideo();
+      }
+    };
 
+    window.addEventListener('stopOtherPlayers', handleStopOthers);
+    return () => window.removeEventListener('stopOtherPlayers', handleStopOthers);
+  }, [player, videoId]);
   const handleRestart = () => {
     if (!player) return;
     player.seekTo(0);
@@ -117,8 +140,13 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
       <div className="flex items-center gap-2 flex-shrink-0">
         <button 
           onClick={() => {
-            if (!player) return; // Якщо плеєр ще не готовий, нічого не робимо
-            isPlaying ? player.pauseVideo() : player.playVideo();
+            if (!player) return;
+            if (isPlaying) {
+              player.pauseVideo();
+            } else {
+              window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
+              player.playVideo();
+            }
           }}
           className="w-10 h-10 flex items-center justify-center bg-blue-600 rounded-full hover:bg-blue-500 transition-all active:scale-95 flex-shrink-0 shadow-lg"
         >
@@ -174,7 +202,9 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
         </div>
       )}
       
-      <div ref={playerRef} className="hidden"></div>
+      <div className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none">
+        <div ref={playerRef}></div>
+      </div>
     </div>
   );
 }

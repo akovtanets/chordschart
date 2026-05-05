@@ -10,12 +10,18 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
   
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState(""); // Состояние для YouTube ссылки
+  const [youtubeUrl, setYoutubeUrl] = useState(""); 
+  
+  // ДОДАНІ ПОЛЯ:
+  const [songKey, setSongKey] = useState("");
+  const [bpm, setBpm] = useState("");
+  const [duration, setDuration] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
-  // Загружаем текущие данные песни
+  // Завантажуємо поточні дані пісні
   useEffect(() => {
     const fetchSong = async () => {
       const { data, error } = await supabase
@@ -27,7 +33,12 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
       if (data) {
         setTitle(data.title);
         setContent(data.content);
-        setYoutubeUrl(data.youtube_url || ""); // Заполняем поле, если ссылка есть
+        setYoutubeUrl(data.youtube_url || ""); 
+        
+        // ЗАВАНТАЖУЄМО НОВІ ПОЛЯ:
+        setSongKey(data.key || "");
+        setBpm(data.bpm ? data.bpm.toString() : ""); 
+        setDuration(data.duration || "");
       }
       setLoading(false);
     };
@@ -44,14 +55,18 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
       .update({ 
         title, 
         content, 
-        youtube_url: youtubeUrl // Сохраняем обновленную ссылку
+        youtube_url: youtubeUrl,
+        // ЗБЕРІГАЄМО НОВІ ПОЛЯ:
+        key: songKey,
+        bpm: bpm ? parseInt(bpm) : null,
+        duration: duration || null
       })
       .eq("id", songId);
 
     if (error) {
       alert("Помилка при оновленні: " + error.message);
     } else {
-      router.back(); // Возвращаемся назад после сохранения
+      router.back(); 
     }
     setSaving(false);
   };
@@ -74,7 +89,6 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
           />
         </div>
 
-        {/* ПОЛЕ YOUTUBE */}
         <div>
           <label className="text-xs text-gray-500 uppercase ml-1">YouTube Посилання</label>
           <input
@@ -84,6 +98,40 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
             onChange={(e) => setYoutubeUrl(e.target.value)}
             className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-red-900"
           />
+        </div>
+
+        {/* НОВИЙ БЛОК: Тональність, Темп, Тривалість */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-gray-500 uppercase ml-1">Тональність</label>
+            <input
+              type="text"
+              placeholder="Bb, Eb, Gm..."
+              value={songKey}
+              onChange={(e) => setSongKey(e.target.value)}
+              className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 uppercase ml-1">Темп (BPM)</label>
+            <input
+              type="number"
+              placeholder="120"
+              value={bpm}
+              onChange={(e) => setBpm(e.target.value)}
+              className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 uppercase ml-1">Тривалість</label>
+            <input
+              type="text"
+              placeholder="03:45"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
 
         <div>

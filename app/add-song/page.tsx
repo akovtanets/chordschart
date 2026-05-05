@@ -9,6 +9,9 @@ export default function AddSongPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [songKey, setSongKey] = useState("");
+  const [bpm, setBpm] = useState("");
+  const [duration, setDuration] = useState("");
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const router = useRouter();
@@ -56,7 +59,10 @@ export default function AddSongPage() {
       { 
         title, 
         content, 
-        youtube_url: youtubeUrl 
+        youtube_url: youtubeUrl,
+        key: songKey, 
+        bpm: bpm ? parseInt(bpm) : null, // Сохраняем темп как число
+        duration: duration || null
       }
     ]);
 
@@ -130,7 +136,39 @@ export default function AddSongPage() {
             className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-red-900 transition-colors"
           />
         </div>
-
+        {/* НОВЫЙ БЛОК: Тональность, Темп, Длительность */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1">
+             <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-wider font-bold">Тональність</label>
+             <input
+               type="text"
+               placeholder="Am, C, Bb..."
+               value={songKey}
+               onChange={(e) => setSongKey(e.target.value)}
+               className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+             />
+          </div>
+          <div className="flex flex-col gap-1">
+             <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-wider font-bold">Темп (BPM)</label>
+             <input
+               type="number"
+               placeholder="120"
+               value={bpm}
+               onChange={(e) => setBpm(e.target.value)}
+               className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+             />
+          </div>
+          <div className="flex flex-col gap-1">
+             <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-wider font-bold">Тривалість</label>
+             <input
+               type="text"
+               placeholder="03:45"
+               value={duration}
+               onChange={(e) => setDuration(e.target.value)}
+               className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+             />
+          </div>
+        </div>
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-wider font-bold">Текст та акорди</label>
           <textarea
