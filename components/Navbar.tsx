@@ -12,10 +12,10 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [user, setUser] = useState<any>(null); // Стан для користувача
+  const [user, setUser] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Перевірка авторизації
+  // Перевірка авторизації та відстеження стану
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -24,12 +24,17 @@ export default function Navbar() {
 
     getUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+
+      // Якщо користувач виходить, автоматично відправляємо на головну
+      if (event === "SIGNED_OUT") {
+        router.push("/");
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   // Логіка пошуку
   useEffect(() => {
@@ -68,9 +73,10 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Оновлена функція виходу
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.refresh();
+    router.push("/");
   };
 
   if (pathname.startsWith('/setlists/')) return null;
@@ -79,11 +85,9 @@ export default function Navbar() {
     <header className="w-full bg-white border-b border-gray-200 h-[65px] flex items-center shadow-sm sticky top-0 z-50">
       <div className="w-full px-6 flex items-center justify-between">
         
-        
-        {/* LEFT: Логотип з метрономом */}
+        {/* LEFT: Логотип */}
         <div className="flex-shrink-0 flex items-center">
           <Link href="/" className="flex items-center gap-2 group">
-            {/* Іконка метронома (стилізована) */}
             <div className="relative w-8 h-8 flex items-center justify-center bg-[#0090ff] rounded-lg shadow-lg group-hover:bg-[#007cdb] transition-colors">
               <svg 
                 viewBox="0 0 24 24" 
@@ -94,16 +98,11 @@ export default function Navbar() {
                 strokeLinejoin="round" 
                 className="w-5 h-5"
               >
-                {/* Корпус метронома */}
                 <path d="M12 2L7 22h10L12 2z" />
-                {/* Маятник */}
                 <path d="M12 18l-2-9" className="animate-[ping_1.5s_infinite]" />
-                {/* Грузик на маятнику */}
                 <circle cx="10" cy="9" r="1" fill="white" />
               </svg>
             </div>
-
-            {/* Текст логотипа */}
             <span className="text-black font-black italic text-xl tracking-tighter ml-1">
               CHORDS<span className="text-[#0090ff] not-italic">CHART</span>
             </span>
@@ -161,7 +160,6 @@ export default function Navbar() {
 
           <div className="flex items-center gap-4">
             {user ? (
-              // Вигляд, коли користувач залогінений
               <div className="flex items-center gap-4">
                 <span className="text-[11px] text-gray-400 font-medium lowercase hidden xl:inline">
                   {user.email}
@@ -174,7 +172,6 @@ export default function Navbar() {
                 </button>
               </div>
             ) : (
-              // Вигляд, коли НЕ залогінений
               <Link href="/login" className="text-[#888] text-[12px] font-bold uppercase tracking-widest hover:text-black transition-colors flex items-center gap-2">
                 <div className="w-8 h-8 border border-gray-200 rounded-full flex items-center justify-center">
                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
