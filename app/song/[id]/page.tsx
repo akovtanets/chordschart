@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import YouTubePlayer from "@/components/YouTubePlayer";
+import Metronome from "@/components/Metronome"; // Імпортуємо метроном
 
 export default function SongPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -114,7 +115,8 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           <div className="flex flex-col items-end gap-6 w-full lg:w-auto">
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 items-center">
+              {/* Атрибути пісні */}
               {[
                 { label: "Key", val: song.default_key, color: "text-blue-400" },
                 { label: "BPM", val: song.bpm },
@@ -126,6 +128,13 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
                   <p className={`font-bold font-mono text-base ${attr.color || "text-white"}`}>{attr.val || "—"}</p>
                 </div>
               ))}
+
+              {/* МЕТРОНОМ: З'являється тільки якщо вказано BPM */}
+              {song.bpm && (
+                <div className="ml-2">
+                  <Metronome bpm={parseInt(song.bpm)} />
+                </div>
+              )}
             </div>
 
             {isOwner ? (
