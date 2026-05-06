@@ -39,5 +39,5 @@ export async function GET(request: Request) {
   // Якщо коду немає або сталася помилка, але ми бачимо access_token в хеші (як у вашому випадку),
   // це означає, що клієнтська частина Supabase сама підхопить сесію.
   // Тому ми просто редиректимо на /songs, а клієнтський SDK зробить свою роботу.
-  return NextResponse.redirect(`${origin}/songs`)
+  return NextResponse.redirect(`${origin}/`);
 }

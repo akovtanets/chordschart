@@ -16,8 +16,8 @@ export default function Home() {
 
         <div className="relative z-20 max-w-4xl">
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6">
-            Створено для прославлення. <br /> 
-            <span className="italic font-black text-[#0090ff]">ChordsChart.</span>
+            Створено для прославлення<br /> 
+            <span className="italic font-black text-[#0090ff]">ChordsChart</span>
           </h1>
           
           <p className="text-[#ccc] text-lg md:text-xl font-light leading-relaxed mb-10 max-w-2xl mx-auto italic">

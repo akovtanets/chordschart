@@ -27,7 +27,6 @@ export default function Navbar() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
 
-      // Якщо користувач виходить, автоматично відправляємо на головну
       if (event === "SIGNED_OUT") {
         router.push("/");
       }
@@ -73,7 +72,6 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Оновлена функція виходу
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -151,9 +149,13 @@ export default function Navbar() {
             <Link href="/songs" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/songs' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>
               Пісні
             </Link>
-            <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>
-              Сетлісти
-            </Link>
+            
+            {/* ТУТ ЗМІНИ: Сетлісти відображаються тільки для авторизованих */}
+            {user && (
+              <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>
+                Сетлісти
+              </Link>
+            )}
           </nav>
 
           <div className="h-6 w-[1px] bg-gray-200 hidden md:block"></div>

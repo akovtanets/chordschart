@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { processFileAction } from "@/app/actions/parse-song";
-import { Turnstile } from "@marsidev/react-turnstile"; //
+import { Turnstile } from "@marsidev/react-turnstile";
 
 export default function AddSongPage() {
   const [title, setTitle] = useState("");
@@ -15,7 +15,7 @@ export default function AddSongPage() {
   const [length, setLength] = useState("");
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null); //
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
   const router = useRouter();
 
@@ -31,15 +31,30 @@ export default function AddSongPage() {
 
       const result = await processFileAction(formData);
 
-      // ВИПРАВЛЕНО: Додано перевірку типів для TS, щоб не було помилки на 'content'
       if (result.success && result.data) {
-        const data = result.data as { title?: string; content?: string };
+        // Отримуємо дані як any, щоб зручно дістати масив sections
+        const data = result.data as any;
+        
         setTitle(data.title || "");
-        setContent(data.content || "");
+        setSongKey(data.key || "");
+
+        // Перетворюємо масив секцій від ШІ назад у текст для редактора
+        if (data.sections && Array.isArray(data.sections)) {
+          const formattedContent = data.sections
+            .map((section: any) => {
+              const header = `[${section.type}]`;
+              const lines = section.lines.join("\n");
+              return `${header}\n${lines}`;
+            })
+            .join("\n\n");
+
+          setContent(formattedContent);
+        }
       } else {
         alert(result.error || "ШІ не зміг розпізнати файл");
       }
     } catch (err) {
+      console.error("Помилка при аналізі:", err);
       alert("Сталася помилка при відправці файлу на сервер.");
     } finally {
       setParsing(false);
@@ -48,32 +63,47 @@ export default function AddSongPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!captchaToken) return;
+    e.preventDefault();
+    if (!captchaToken) {
+      alert("Будь ласка, пройдіть перевірку капчею.");
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  // ПЕРЕВІРКА ЧЕРЕЗ EDGE FUNCTION
-  const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-    body: { token: captchaToken }
-  });
+    try {
+      // ПЕРЕВІРКА ЧЕРЕЗ EDGE FUNCTION
+      const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
+        body: { token: captchaToken }
+      });
 
-  if (verifyError || !verification?.success) {
-    alert("Помилка перевірки Cloudflare. Спробуйте ще раз.");
-    setLoading(false);
-    return;
-  }
+      if (verifyError || !verification?.success) {
+        alert("Помилка перевірки Cloudflare. Спробуйте ще раз.");
+        setLoading(false);
+        return;
+      }
 
-  // ЯКЩО УСПІШНО — ЗБЕРІГАЄМО
-  const { error } = await supabase.from("songs").insert([{ 
-    title, content, youtube_url: youtubeUrl, default_key: songKey, bpm, length 
-  }]);
+      // ЗБЕРІГАЄМО ПІСНЮ
+      const { error } = await supabase.from("songs").insert([{ 
+        title, 
+        content, 
+        youtube_url: youtubeUrl, 
+        default_key: songKey, 
+        bpm: bpm || null, 
+        length: length || null 
+      }]);
 
-  if (error) alert(error.message);
-  else router.push("/songs");
-  
-  setLoading(false);
-};
+      if (error) {
+        alert(`Помилка бази даних: ${error.message}`);
+      } else {
+        router.push("/songs");
+      }
+    } catch (err) {
+      alert("Сталася критична помилка при збереженні.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-black text-white min-h-screen">
@@ -103,7 +133,7 @@ export default function AddSongPage() {
               {parsing ? "⏳" : "✨"}
             </span>
             <p className="text-sm text-gray-400 font-bold uppercase tracking-wider">
-              {parsing ? "ШІ аналізує структуру..." : "Завантажити файл"}
+              {parsing ? "ШІ аналізує структуру..." : "Завантажити файл (PDF, DOCX, TXT)"}
             </p>
           </div>
         </label>
@@ -178,15 +208,13 @@ export default function AddSongPage() {
           />
         </div>
 
-        {/* TURNSTILE WIDGET */}
         <div className="my-2 flex justify-center">
           <Turnstile
-        siteKey="0x4AAAAAADKKcfnA9ehATL1w" 
-        onSuccess={(token) => setCaptchaToken(token)}
-        onExpire={() => setCaptchaToken(null)}
-        // Якщо тема критична, спробуйте так:
-        options={{ theme: 'dark' }} 
-      />
+            siteKey="0x4AAAAAADKKcfnA9ehATL1w" 
+            onSuccess={(token) => setCaptchaToken(token)}
+            onExpire={() => setCaptchaToken(null)}
+            options={{ theme: 'dark' }} 
+          />
         </div>
 
         <button

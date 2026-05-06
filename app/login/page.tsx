@@ -7,7 +7,6 @@ import { Turnstile } from "@marsidev/react-turnstile";
 
 export default function LoginPage() {
   const router = useRouter();
-  // Змінено: за замовчуванням тепер "sign_in"
   const [view, setView] = useState<"sign_in" | "sign_up">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,9 +14,11 @@ export default function LoginPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   useEffect(() => {
+    // Відстежуємо стан авторизації для OAuth (Google) та автоматичного входу
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        router.push('/songs');
+        router.refresh();
+        router.push('/'); // ЗМІНЕНО: перекидаємо на головну
       }
     });
     return () => subscription.unsubscribe();
@@ -30,31 +31,37 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. ПЕРЕВІРКА ЧЕРЕЗ EDGE FUNCTION
+      // 1. ПЕРЕВІРКА КАПЧІ
       const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
         body: { token: captchaToken }
       });
 
       if (verifyError || !verification?.success) {
-        const errorDetail = verification?.details ? JSON.stringify(verification.details) : "Unknown error";
-        alert(`Помилка капчі: ${errorDetail}`);
+        alert("Помилка капчі. Спробуйте ще раз.");
         setLoading(false);
         return;
       }
 
       // 2. AUTH ДІЯ
-      const { error } = view === "sign_up" 
-        ? await supabase.auth.signUp({ 
-            email, 
-            password,
-            options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
-          })
-        : await supabase.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        alert(error.message);
-      } else if (view === "sign_up") {
-        alert("Лист для підтвердження надіслано на вашу пошту!");
+      if (view === "sign_up") {
+        const { error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+        });
+        if (error) alert(error.message);
+        else alert("Лист для підтвердження надіслано на вашу пошту!");
+      } else {
+        // Вхід по Email/Password
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        
+        if (error) {
+          alert(error.message);
+        } else if (data?.session) {
+          // Якщо логін успішний
+          router.refresh();
+          router.push('/'); // ЗМІНЕНО: перекидаємо на головну
+        }
       }
     } catch (err) {
       console.error("Submit error:", err);
@@ -68,7 +75,8 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // Також важливо, що в callback ми теж можемо налаштувати редирект
+        redirectTo: `${window.location.origin}/auth/callback?next=/`,
       },
     });
 
@@ -144,6 +152,7 @@ export default function LoginPage() {
           onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 p-3 bg-white text-black rounded-xl font-bold transition-all hover:bg-gray-200 active:scale-95"
         >
+          {/* SVG іконка Google залишається без змін */}
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-1 .67-2.28 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
