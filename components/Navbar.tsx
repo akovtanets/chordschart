@@ -89,7 +89,7 @@ export default function Navbar() {
           </Link>
         </div>
 
-        {/* CENTER: Search (Зменшені відступи для мобільних) */}
+        {/* CENTER: Search */}
         <div className="flex-1 flex justify-center px-2 md:px-10 relative print:hidden" ref={dropdownRef}>
           <div className="relative w-full max-w-lg group">
             <input 
@@ -121,7 +121,13 @@ export default function Navbar() {
         <div className="flex items-center gap-3 md:gap-6 print:hidden flex-shrink-0">
           <nav className="hidden lg:flex items-center gap-6">
             <Link href="/songs" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/songs' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Пісні</Link>
-            {user && <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Сетлісти</Link>}
+            {user && (
+              <>
+                <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Сетлісти</Link>
+                {/* Нове посилання на Команду */}
+                <Link href="/team" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/team' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Команда</Link>
+              </>
+            )}
           </nav>
 
           <div className="h-6 w-[1px] bg-gray-200 hidden md:block"></div>
