@@ -8,6 +8,7 @@ import { Turnstile } from "@marsidev/react-turnstile";
 
 export default function AddSongPage() {
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState(""); // ДОДАНО: Стан для автора
   const [content, setContent] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [songKey, setSongKey] = useState("");
@@ -32,13 +33,12 @@ export default function AddSongPage() {
       const result = await processFileAction(formData);
 
       if (result.success && result.data) {
-        // Отримуємо дані як any, щоб зручно дістати масив sections
         const data = result.data as any;
         
         setTitle(data.title || "");
+        setAuthor(data.author || ""); // ДОДАНО: ШІ спробує знайти автора
         setSongKey(data.key || "");
 
-        // Перетворюємо масив секцій від ШІ назад у текст для редактора
         if (data.sections && Array.isArray(data.sections)) {
           const formattedContent = data.sections
             .map((section: any) => {
@@ -72,7 +72,6 @@ export default function AddSongPage() {
     setLoading(true);
 
     try {
-      // ПЕРЕВІРКА ЧЕРЕЗ EDGE FUNCTION
       const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
         body: { token: captchaToken }
       });
@@ -83,9 +82,10 @@ export default function AddSongPage() {
         return;
       }
 
-      // ЗБЕРІГАЄМО ПІСНЮ
+      // ДОДАНО: author до зберігання в Supabase
       const { error } = await supabase.from("songs").insert([{ 
         title, 
+        author: author || null, 
         content, 
         youtube_url: youtubeUrl, 
         default_key: songKey, 
@@ -140,16 +140,31 @@ export default function AddSongPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Назва пісні</label>
-          <input
-            type="text"
-            placeholder="Наприклад: Чудова Благодать"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
-          />
+        
+        {/* Ряд: Назва та Автор */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Назва пісні</label>
+            <input
+              type="text"
+              placeholder="Наприклад: Чудова Благодать"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Автор / Виконавець</label>
+            <input
+              type="text"
+              placeholder="Наприклад: Chris Tomlin"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1">
