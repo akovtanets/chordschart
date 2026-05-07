@@ -15,10 +15,12 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Стейты для поиска
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  
   const [setlistDate, setSetlistDate] = useState<string | null>(null);
-
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSizeLevel, setFontSizeLevel] = useState(0); 
   const [capo, setCapo] = useState(0);
@@ -73,6 +75,27 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
 
   useEffect(() => { fetchSetlistAndSongs(); }, [fetchSetlistAndSongs]);
 
+  // ЛОГИКА ПОИСКА: Запрос к Supabase при вводе текста
+  useEffect(() => {
+    const fetchSearchResults = async () => {
+      const trimmedQuery = searchQuery.trim();
+      if (trimmedQuery.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("songs")
+        .select("id, title, author")
+        .ilike("title", `${trimmedQuery}%`)
+        .limit(5);
+
+      if (data) setSearchResults(data);
+    };
+
+    const timer = setTimeout(fetchSearchResults, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   useEffect(() => {
     const loadSongSettings = async () => {
       if (!userId || !songs[currentIndex]) return;
@@ -122,13 +145,35 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   const addSong = async (songToAdd: any) => {
     if (songs.find(s => s.id === songToAdd.id)) return;
     const { data: fullSong } = await supabase.from("songs").select("*").eq("id", songToAdd.id).single();
-    if (fullSong) await updateDatabase([...songs, fullSong]);
+    if (fullSong) {
+      await updateDatabase([...songs, fullSong]);
+      setSearchQuery(""); // Очищаем поиск после добавления
+      setSearchResults([]);
+    }
   };
 
   const removeSong = async (id: number) => {
     const newSongs = songs.filter(s => s.id !== id);
     if (currentIndex >= newSongs.length) setCurrentIndex(Math.max(0, newSongs.length - 1));
     await updateDatabase(newSongs);
+  };
+
+  // ФУНКЦИЯ ДЛЯ ПЕРЕМЕЩЕНИЯ ПЕСЕН
+  const moveSong = async (index: number, direction: 'up' | 'down') => {
+    const newSongs = [...songs];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newSongs.length) return;
+    
+    // Меняем местами
+    [newSongs[index], newSongs[targetIndex]] = [newSongs[targetIndex], newSongs[index]];
+    await updateDatabase(newSongs);
+
+    // Если мы переместили текущую песню, сдвигаем и индекс, чтобы не сбился просмотр
+    if (currentIndex === index) {
+      setCurrentIndex(targetIndex);
+    } else if (currentIndex === targetIndex) {
+      setCurrentIndex(index);
+    }
   };
 
   const goToNext = () => setCurrentIndex((p) => (p < songs.length - 1 ? p + 1 : p));
@@ -148,7 +193,6 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
 
       <div className={`flex flex-col flex-1 h-full transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''} print:m-0`}>
         
-        {/* Адаптивний Header */}
         <div className="sticky top-0 w-full flex justify-between items-center p-2 md:p-4 bg-[#0d0d0d] border-b border-gray-800 z-[50] shadow-2xl print:hidden gap-1 md:gap-4">
           <div className="flex gap-1 md:gap-4 items-center overflow-x-auto custom-scrollbar">
             <Link href={setlistDate ? `/setlists?date=${new Date(setlistDate).toISOString()}` : "/setlists"} className="flex items-center justify-center min-w-[32px] h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-black border border-gray-800 text-gray-400 hover:text-blue-500 transition-all active:scale-90 flex-shrink-0">
@@ -229,7 +273,6 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
                 </div>
               )}
             </div>
-            {/* Текст кнопки ховаємо на мобільних, залишаємо лише іконку або коротке слово */}
             <button onClick={() => setIsEditing(!isEditing)} className="px-4 py-2 md:px-8 md:py-3.5 rounded-full text-[9px] md:text-[11px] font-black bg-white text-black uppercase tracking-widest active:scale-95 transition-all">
               <span className="hidden sm:inline">{isEditing ? 'ГОТОВО' : 'РЕДАГУВАТИ'}</span>
               <span className="sm:hidden">{isEditing ? '✓' : 'РЕД.'}</span>
@@ -249,7 +292,6 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
         </div>
       </div>
 
-      {/* Сайдбар на мобільних краще робити на весь екран при відкритті */}
       <div className={`fixed right-0 top-0 h-full w-full md:w-[350px] bg-[#080808] border-l border-gray-800 transition-transform duration-500 ease-in-out z-[100] p-4 md:p-6 flex flex-col print:hidden ${isEditing ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex justify-between items-center mb-6 md:mb-8">
             <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 font-mono">Редагування</h3>
@@ -273,7 +315,28 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
         <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 mb-3 md:mb-4 font-mono">Черга</h3>
         <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 pr-1 md:pr-2 custom-scrollbar">
           {songs.map((s, index) => (
-            <div key={s.id} className={`flex items-center gap-2 md:gap-4 p-3 md:p-4 rounded-xl border transition-all duration-300 ${index === currentIndex ? 'bg-blue-900/20 border-blue-500/50' : 'bg-[#111] border-gray-900'}`}>
+            <div key={s.id} className={`flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-xl border transition-all duration-300 ${index === currentIndex ? 'bg-blue-900/20 border-blue-500/50' : 'bg-[#111] border-gray-900'}`}>
+              
+              {/* КНОПКИ ДЛЯ ПЕРЕМЕЩЕНИЯ (ВВЕРХ/ВНИЗ) */}
+              <div className="flex flex-col items-center">
+                <button 
+                  onClick={() => moveSong(index, 'up')} 
+                  disabled={index === 0} 
+                  className="p-1 text-gray-600 hover:text-white disabled:opacity-20 transition"
+                  title="Підняти вище"
+                >
+                  ▲
+                </button>
+                <button 
+                  onClick={() => moveSong(index, 'down')} 
+                  disabled={index === songs.length - 1} 
+                  className="p-1 text-gray-600 hover:text-white disabled:opacity-20 transition"
+                  title="Опустити нижче"
+                >
+                  ▼
+                </button>
+              </div>
+
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setCurrentIndex(index)}>
                 <p className={`text-[11px] md:text-[13px] font-bold truncate ${index === currentIndex ? 'text-blue-500' : 'text-gray-300'}`}>{s.title}</p>
               </div>
