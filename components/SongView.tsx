@@ -55,9 +55,15 @@ export default function SongView({
     });
   };
 
+  const handleUpdateSemitones = (delta: number) => {
+    window.dispatchEvent(new CustomEvent('update-song-semitones', { detail: semitones + delta }));
+  };
+
   useEffect(() => {
     const handleScroll = (e: KeyboardEvent) => {
       if (!scrollContainerRef.current) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
       const sections = sectionRefs.current.filter(Boolean);
       const containerTop = scrollContainerRef.current.getBoundingClientRect().top;
       
@@ -95,10 +101,7 @@ export default function SongView({
             const hasFollowingText = nextPart && nextPart.trim().length > 0;
 
             return (
-              <div 
-                key={i} 
-                className={`relative inline-block h-0 overflow-visible ${!hasFollowingText ? 'min-w-[3.5ch] mr-2' : 'w-0'}`}
-              >
+              <div key={i} className={`relative inline-block h-0 overflow-visible ${!hasFollowingText ? 'min-w-[3.5ch] mr-2' : 'w-0'}`}>
                 <span className={`absolute ${chordOffsets[fontSizeLevel]} left-0 font-bold font-mono tracking-tighter whitespace-nowrap transition-all ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
                   {chord}
                 </span>
@@ -121,54 +124,48 @@ export default function SongView({
   const sections: SongSection[] = rawContent.split("\n\n").map((s: string) => {
     const lines = s.split("\n");
     const rawHeader = lines[0].toUpperCase().replace(/[:]/g, "").trim();
-    
-    // Словник для автоматичного перекладу назв блоків
     const translationMap: Record<string, string> = {
-      "INTRO": "ВСТУП",
-      "VERSE": "КУПЛЕТ",
-      "CHORUS": "ПРИСПІВ",
-      "BRIDGE": "БРІДЖ",
-      "INTERLUDE": "ВСТАВКА",
-      "OUTRO": "КІНЕЦЬ",
-      "SOLO": "ПРОГРАШ",
-      "INSTRUMENTAL": "ПРОГРАШ",
-      "TAG": "ТЕГ"
+      "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", "BRIDGE": "БРІДЖ", "INTERLUDE": "ВСТАВКА", "OUTRO": "КІНЕЦЬ", "SOLO": "ПРОГРАШ", "INSTRUMENTAL": "ПРОГРАШ", "TAG": "ТЕГ"
     };
-
     const keywords = ["ВСТУП", "ІНТРО", "КУПЛЕТ", "ПРИСПІВ", "БРІДЖ", "ВСТАВКА", "ІНТЕРЛЮД", "КІНЕЦЬ", "INTRO", "VERSE", "CHORUS", "BRIDGE", "OUTRO", "ПРОГРАШ", "SOLO", "TAG"];
     const isHeader = keywords.some(k => rawHeader.includes(k));
-
     let finalHeader = rawHeader;
-    Object.keys(translationMap).forEach(enKey => {
-      if (rawHeader.includes(enKey)) {
-        finalHeader = rawHeader.replace(enKey, translationMap[enKey]);
-      }
-    });
-
-    return { 
-      type: isHeader ? finalHeader : "СЕКЦІЯ", 
-      lines: isHeader ? lines.slice(1) : lines 
-    };
+    Object.keys(translationMap).forEach(enKey => { if (rawHeader.includes(enKey)) finalHeader = rawHeader.replace(enKey, translationMap[enKey]); });
+    return { type: isHeader ? finalHeader : "СЕКЦІЯ", lines: isHeader ? lines.slice(1) : lines };
   });
 
   return (
     <div className={`flex flex-col h-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
       {/* Шапка пісні */}
       <div className={`p-4 md:p-6 border-b flex-shrink-0 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'}`}>
-        <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
-          <div>
-            <h1 className={`text-2xl sm:text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-1 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
+        <div className="max-w-[1200px] mx-auto">
+          {/* Тільки заголовок */}
+          <div className="mb-6 text-center md:text-left">
+            <h1 className={`text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-1 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
             <p className="text-sm md:text-base text-gray-500 font-medium">{song?.author}</p>
           </div>
-          <div className="flex flex-wrap justify-center gap-2">
+
+          {/* Блоки параметрів */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {/* Блок зміни тональності */}
+            <div className={`border px-4 py-2.5 rounded-2xl flex flex-col justify-center ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+              <p className="text-[9px] text-gray-500 uppercase font-black mb-1.5 tracking-widest text-center">ТРАНСПОНУВАТИ</p>
+              <div className="flex items-center justify-between px-2">
+                <button onClick={() => handleUpdateSemitones(-1)} className="text-xl font-bold hover:text-blue-500 transition-colors">−</button>
+                <span className="font-bold font-mono text-xl text-blue-400">{semitones > 0 ? `+${semitones}` : semitones}</span>
+                <button onClick={() => handleUpdateSemitones(1)} className="text-xl font-bold hover:text-blue-500 transition-colors">+</button>
+              </div>
+            </div>
+
             {[
-              { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0) }, 
-              { label: "ТЕМП", val: song?.bpm || "—" }, 
-              { label: "КАПО", val: capo > 0 ? capo : "Ø" }
+              { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0), color: "text-blue-400" },
+              { label: "ТЕМП", val: song?.bpm || "—" },
+              { label: "КАПО", val: capo > 0 ? capo : "Ø" },
+              { label: "ДОВЖИНА", val: song?.length || "—" }
             ].map((attr, idx) => (
-              <div key={idx} className={`border px-3 md:px-5 py-1.5 md:py-2 rounded-xl min-w-[60px] text-center ${theme === 'dark' ? 'bg-black border-gray-800 text-white' : 'bg-gray-50 border-gray-200 text-black'}`}>
-                <p className="text-[6px] md:text-[7px] opacity-50 uppercase font-black mb-0.5 tracking-widest">{attr.label}</p>
-                <p className={`font-bold font-mono text-xs md:text-sm ${attr.label === 'ТОНАЛЬНІСТЬ' ? (theme === 'dark' ? 'text-blue-400' : 'text-blue-600') : ''}`}>{attr.val}</p>
+              <div key={idx} className={`border px-4 py-2.5 rounded-2xl flex flex-col justify-center text-center ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+                <p className="text-[9px] text-gray-500 uppercase font-black mb-1 tracking-widest">{attr.label}</p>
+                <p className={`font-bold font-mono text-xl ${attr.color || (theme === 'dark' ? 'text-white' : 'text-black')}`}>{attr.val}</p>
               </div>
             ))}
           </div>
@@ -184,16 +181,16 @@ export default function SongView({
       )}
 
       {/* Основний контент */}
-      <div ref={scrollContainerRef} className="p-2 sm:p-4 md:p-10 overflow-y-auto flex-1 custom-scrollbar scroll-smooth">
-        <div className="max-w-[1200px] mx-auto flex flex-col gap-4 md:gap-8 pb-60">
+      <div ref={scrollContainerRef} className="p-4 md:p-10 overflow-y-auto flex-1 custom-scrollbar scroll-smooth">
+        <div className="max-w-[1200px] mx-auto flex flex-col gap-6 pb-60">
           {sections.map((section: SongSection, idx: number) => (
             <div 
               key={idx} 
               ref={(el) => { sectionRefs.current[idx] = el; }} 
-              className={`border p-4 sm:p-6 md:p-8 rounded-[20px] md:rounded-[32px] shadow-lg transition-all ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+              className={`border p-6 md:p-8 rounded-[32px] shadow-lg transition-all w-full ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
             >
-              <div className="flex items-center gap-3 mb-6 md:mb-8">
-                <h3 className="text-blue-500 text-[9px] md:text-[11px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
+              <div className="flex items-center gap-4 mb-8">
+                <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
                 <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-gray-100'}`}></div>
               </div>
               <div className="flex flex-col">
