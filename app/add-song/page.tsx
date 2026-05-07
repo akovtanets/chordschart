@@ -8,23 +8,25 @@ import { Turnstile } from "@marsidev/react-turnstile";
 
 export default function AddSongPage() {
   const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState(""); // ДОДАНО: Стан для автора
+  const [author, setAuthor] = useState("");
   const [content, setContent] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [songKey, setSongKey] = useState("");
   const [bpm, setBpm] = useState("");
   const [length, setLength] = useState("");
   const [loading, setLoading] = useState(false);
-  const [parsing, setParsing] = useState(false);
+  
+  // Відстежуємо, який саме блок зараз завантажується
+  const [parsingType, setParsingType] = useState<"pdf" | "docx" | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
   const router = useRouter();
 
-  const handleAiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAiUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "pdf" | "docx") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setParsing(true);
+    setParsingType(type);
 
     try {
       const formData = new FormData();
@@ -36,10 +38,13 @@ export default function AddSongPage() {
         const data = result.data as any;
         
         setTitle(data.title || "");
-        setAuthor(data.author || ""); // ДОДАНО: ШІ спробує знайти автора
+        setAuthor(data.author || "");
         setSongKey(data.key || "");
 
-        if (data.sections && Array.isArray(data.sections)) {
+        // Гнучка обробка контенту (текст або секції)
+        if (data.content) {
+          setContent(data.content);
+        } else if (data.sections && Array.isArray(data.sections)) {
           const formattedContent = data.sections
             .map((section: any) => {
               const header = `[${section.type}]`;
@@ -47,7 +52,6 @@ export default function AddSongPage() {
               return `${header}\n${lines}`;
             })
             .join("\n\n");
-
           setContent(formattedContent);
         }
       } else {
@@ -57,8 +61,8 @@ export default function AddSongPage() {
       console.error("Помилка при аналізі:", err);
       alert("Сталася помилка при відправці файлу на сервер.");
     } finally {
-      setParsing(false);
-      e.target.value = "";
+      setParsingType(null);
+      e.target.value = ""; // Очищаємо інпут
     }
   };
 
@@ -82,7 +86,6 @@ export default function AddSongPage() {
         return;
       }
 
-      // ДОДАНО: author до зберігання в Supabase
       const { error } = await supabase.from("songs").insert([{ 
         title, 
         author: author || null, 
@@ -109,34 +112,66 @@ export default function AddSongPage() {
     <div className="max-w-2xl mx-auto p-6 bg-black text-white min-h-screen">
       <h1 className="text-2xl font-bold mb-6 italic uppercase tracking-tighter">Додати нову пісню</h1>
       
-      {/* AI Upload Section */}
-      <div className="mb-6">
-        <input 
-          type="file" 
-          id="ai-upload-input"
-          className="hidden" 
-          accept=".pdf,.docx,.txt" 
-          onChange={handleAiUpload}
-          disabled={parsing || loading}
-        />
-        <label 
-          htmlFor="ai-upload-input"
-          className={`
-            flex flex-col items-center justify-center w-full h-32 
-            border-2 border-dashed rounded-xl cursor-pointer
-            transition-all border-gray-800 hover:border-[#0090ff] bg-[#0a0a0a]
-            ${parsing ? "opacity-50 cursor-not-allowed border-[#0090ff]" : "hover:bg-[#111]"}
-          `}
-        >
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <span className={`text-2xl mb-2 ${parsing ? "animate-bounce" : ""}`}>
-              {parsing ? "⏳" : "✨"}
+      {/* AI Upload Section - Two Distinct Blocks */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        
+        {/* PDF Block */}
+        <div className="relative">
+          <input 
+            type="file" 
+            id="pdf-upload"
+            className="hidden" 
+            accept=".pdf" 
+            onChange={(e) => handleAiUpload(e, "pdf")}
+            disabled={parsingType !== null || loading}
+          />
+          <label 
+            htmlFor="pdf-upload"
+            className={`
+              flex flex-col items-center justify-center w-full h-32 
+              border-2 border-dashed rounded-xl cursor-pointer
+              transition-all duration-300 bg-[#0a0a0a]
+              ${parsingType === "pdf" ? "border-red-500 bg-[#150a0a]" : "border-gray-800 hover:border-red-500 hover:bg-[#111]"}
+              ${parsingType !== null && parsingType !== "pdf" ? "opacity-20 cursor-not-allowed" : "opacity-100"}
+            `}
+          >
+            <span className={`text-3xl mb-2 ${parsingType === "pdf" ? "animate-spin" : ""}`}>
+              {parsingType === "pdf" ? "⏳" : "📕"}
             </span>
-            <p className="text-sm text-gray-400 font-bold uppercase tracking-wider">
-              {parsing ? "ШІ аналізує структуру..." : "Завантажити файл (PDF, DOCX, TXT)"}
+            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+              {parsingType === "pdf" ? "Аналізуємо PDF..." : "Завантажити PDF"}
             </p>
-          </div>
-        </label>
+          </label>
+        </div>
+
+        {/* Word Block */}
+        <div className="relative">
+          <input 
+            type="file" 
+            id="word-upload"
+            className="hidden" 
+            accept=".docx" 
+            onChange={(e) => handleAiUpload(e, "docx")}
+            disabled={parsingType !== null || loading}
+          />
+          <label 
+            htmlFor="word-upload"
+            className={`
+              flex flex-col items-center justify-center w-full h-32 
+              border-2 border-dashed rounded-xl cursor-pointer
+              transition-all duration-300 bg-[#0a0a0a]
+              ${parsingType === "docx" ? "border-blue-500 bg-[#0a0e15]" : "border-gray-800 hover:border-blue-500 hover:bg-[#111]"}
+              ${parsingType !== null && parsingType !== "docx" ? "opacity-20 cursor-not-allowed" : "opacity-100"}
+            `}
+          >
+            <span className={`text-3xl mb-2 ${parsingType === "docx" ? "animate-spin" : ""}`}>
+              {parsingType === "docx" ? "⏳" : "📘"}
+            </span>
+            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+              {parsingType === "docx" ? "Аналізуємо Word..." : "Завантажити WORD"}
+            </p>
+          </label>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -234,8 +269,8 @@ export default function AddSongPage() {
 
         <button
           type="submit"
-          disabled={loading || parsing || !title || !content || !captchaToken}
-          className="p-4 bg-[#0090ff] hover:bg-[#33a5ff] disabled:bg-gray-800 disabled:text-gray-500 rounded-xl font-bold transition-all mt-2 active:scale-95 uppercase text-xs tracking-widest"
+          disabled={loading || parsingType !== null || !title || !content || !captchaToken}
+          className="p-4 bg-[#0090ff] hover:bg-[#33a5ff] disabled:bg-gray-800 disabled:text-gray-500 rounded-xl font-bold transition-all mt-2 active:scale-95 uppercase text-xs tracking-widest text-white"
         >
           {loading ? "Збереження..." : "Зберегти пісню"}
         </button>

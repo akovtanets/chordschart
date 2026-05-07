@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import SongView from "@/components/SongView";
 import Metronome from "@/components/Metronome";
 import Link from "next/link";
 
-export default function SetlistPage({ params }: { params: Promise<{ id: string }> }) {
+// Исправленный интерфейс для Next.js 15+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function SetlistPage({ params }: PageProps) {
+  // Распаковываем Promise параметров
   const unwrappedParams = use(params);
   const setlistId = unwrappedParams.id;
 
@@ -16,7 +22,6 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   const [isEditing, setIsEditing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
-  // Стейты для поиска
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   
@@ -27,55 +32,60 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   const [semitones, setSemitones] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const cacheKey = `setlist_cache_${setlistId}`;
+  const cacheKey = useMemo(() => `setlist_cache_${setlistId}`, [setlistId]);
 
   const fetchSetlistAndSongs = useCallback(async () => {
-    const controller = new AbortController();
-    
-    const loadData = async () => {
+    try {
       const cachedData = sessionStorage.getItem(cacheKey);
       if (cachedData) {
-        try {
-          const parsedCache = JSON.parse(cachedData);
-          setSongs(parsedCache.songs);
-          setSetlistDate(parsedCache.date);
-          setLoading(false); 
-        } catch (e) {
-          console.error("Cache parsing error", e);
-        }
-      } else {
-        setLoading(true);
+        const parsedCache = JSON.parse(cachedData);
+        setSongs(parsedCache.songs);
+        setSetlistDate(parsedCache.date);
+        setLoading(false);
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       setUserId(session?.user?.id || null);
 
-      const { data: setlist } = await supabase.from("setlists").select("song_ids, created_at").eq("id", setlistId).single();
+      const { data: setlist, error: setlistError } = await supabase
+        .from("setlists")
+        .select("song_ids, created_at")
+        .eq("id", setlistId)
+        .single();
+
+      if (setlistError) throw setlistError;
 
       if (setlist) {
         setSetlistDate(setlist.created_at);
-        if (setlist.song_ids?.length > 0) {
-          const { data: songsData } = await supabase.from("songs").select("*").in("id", setlist.song_ids);
+        if (setlist.song_ids && setlist.song_ids.length > 0) {
+          const { data: songsData } = await supabase
+            .from("songs")
+            .select("*")
+            .in("id", setlist.song_ids);
+
           if (songsData) {
-            const sortedSongs = setlist.song_ids.map((id: any) => songsData.find((s: any) => s.id === Number(id))).filter(Boolean);
+            const sortedSongs = setlist.song_ids
+              .map((id: any) => songsData.find((s: any) => s.id === Number(id)))
+              .filter(Boolean);
+            
             setSongs(sortedSongs);
             sessionStorage.setItem(cacheKey, JSON.stringify({ songs: sortedSongs, date: setlist.created_at }));
           }
         } else {
           setSongs([]);
-          sessionStorage.setItem(cacheKey, JSON.stringify({ songs: [], date: setlist.created_at }));
         }
       }
+    } catch (err) {
+      console.error("Error loading setlist:", err);
+    } finally {
       setLoading(false);
-    };
-
-    loadData();
-    return () => controller.abort();
+    }
   }, [setlistId, cacheKey]);
 
-  useEffect(() => { fetchSetlistAndSongs(); }, [fetchSetlistAndSongs]);
+  useEffect(() => {
+    fetchSetlistAndSongs();
+  }, [setlistId, fetchSetlistAndSongs]);
 
-  // ЛОГИКА ПОИСКА: Запрос к Supabase при вводе текста
   useEffect(() => {
     const fetchSearchResults = async () => {
       const trimmedQuery = searchQuery.trim();
@@ -99,16 +109,26 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   useEffect(() => {
     const loadSongSettings = async () => {
       if (!userId || !songs[currentIndex]) return;
-      const { data } = await supabase.from("user_song_settings").select("transposition_offset").eq("user_id", userId).eq("setlist_id", setlistId).eq("song_id", songs[currentIndex].id).maybeSingle();
+      const { data } = await supabase
+        .from("user_song_settings")
+        .select("transposition_offset")
+        .eq("user_id", userId)
+        .eq("setlist_id", setlistId)
+        .eq("song_id", songs[currentIndex].id)
+        .maybeSingle();
+      
       setSemitones(data?.transposition_offset || 0);
     };
     loadSongSettings();
-  }, [currentIndex, songs, userId, setlistId]);
+  }, [currentIndex, userId, setlistId, songs]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.code === "Space") { event.preventDefault(); window.dispatchEvent(new CustomEvent("toggle-youtube-play")); }
+      if (event.code === "Space") { 
+        event.preventDefault(); 
+        window.dispatchEvent(new CustomEvent("toggle-youtube-play")); 
+      }
       if (!isEditing && searchQuery.length === 0) {
         if (event.key === "ArrowRight") goToNext();
         if (event.key === "ArrowLeft") goToPrev();
@@ -121,14 +141,21 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
   const saveSemitones = async (offset: number) => {
     setSemitones(offset);
     if (!userId || !songs[currentIndex]) return;
-    await supabase.from("user_song_settings").upsert({ user_id: userId, setlist_id: Number(setlistId), song_id: songs[currentIndex].id, transposition_offset: offset }, { onConflict: "user_id,setlist_id,song_id" });
+    await supabase.from("user_song_settings").upsert({ 
+      user_id: userId, 
+      setlist_id: Number(setlistId), 
+      song_id: songs[currentIndex].id, 
+      transposition_offset: offset 
+    }, { onConflict: "user_id,setlist_id,song_id" });
   };
 
   const getCapoKeyLabel = (capoValue: number) => {
     if (!songs[currentIndex]) return "";
     const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
     const currentSongKey = songs[currentIndex].default_key || "C";
-    const baseNote = currentSongKey.replace(/([A-G][b#]?)/g, (match: string) => match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab"));
+    const baseNote = currentSongKey.replace(/([A-G][b#]?)/g, (match: string) => 
+      match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab")
+    );
     const noteMatch = baseNote.match(/[A-G][b#]?/);
     const noteIndex = noteMatch ? NOTES.indexOf(noteMatch[0]) : 0;
     const capoKeyIndex = (noteIndex + semitones - capoValue + 120) % 12;
@@ -147,7 +174,7 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
     const { data: fullSong } = await supabase.from("songs").select("*").eq("id", songToAdd.id).single();
     if (fullSong) {
       await updateDatabase([...songs, fullSong]);
-      setSearchQuery(""); // Очищаем поиск после добавления
+      setSearchQuery("");
       setSearchResults([]);
     }
   };
@@ -158,22 +185,16 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
     await updateDatabase(newSongs);
   };
 
-  // ФУНКЦИЯ ДЛЯ ПЕРЕМЕЩЕНИЯ ПЕСЕН
   const moveSong = async (index: number, direction: 'up' | 'down') => {
     const newSongs = [...songs];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= newSongs.length) return;
     
-    // Меняем местами
     [newSongs[index], newSongs[targetIndex]] = [newSongs[targetIndex], newSongs[index]];
     await updateDatabase(newSongs);
 
-    // Если мы переместили текущую песню, сдвигаем и индекс, чтобы не сбился просмотр
-    if (currentIndex === index) {
-      setCurrentIndex(targetIndex);
-    } else if (currentIndex === targetIndex) {
-      setCurrentIndex(index);
-    }
+    if (currentIndex === index) setCurrentIndex(targetIndex);
+    else if (currentIndex === targetIndex) setCurrentIndex(index);
   };
 
   const goToNext = () => setCurrentIndex((p) => (p < songs.length - 1 ? p + 1 : p));
@@ -185,7 +206,7 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
     setTimeout(() => { window.print(); }, 100);
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-black text-gray-800 font-mono text-[10px] uppercase tracking-widest">Завантаження...</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center bg-black text-gray-400 font-mono text-[10px] uppercase tracking-widest">Завантаження...</div>;
 
   return (
     <div className="flex h-screen overflow-hidden bg-black text-white print:h-auto print:overflow-visible print:bg-white">
@@ -216,14 +237,14 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
               </button>
               
               {showSettings && (
-                <div className="absolute right-0 mt-2 md:mt-3 w-[260px] md:w-72 bg-[#0d0d0d] border border-gray-800 rounded-[24px] md:rounded-[32px] p-4 md:p-6 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute right-0 mt-2 md:mt-3 w-[260px] md:w-72 bg-[#0d0d0d] border border-gray-800 rounded-[24px] md:rounded-[32px] p-4 md:p-6 shadow-2xl z-[100]">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4 md:mb-6 text-center italic">Налаштування</h4>
                   <div className="space-y-4 md:space-y-6">
                     <div>
                       <p className="text-[9px] md:text-[10px] font-black text-gray-500 mb-2 md:mb-3 uppercase text-center tracking-widest">Тема</p>
                       <div className="flex gap-2 md:gap-4">
-                        <button onClick={() => setTheme('dark')} className={`flex-1 h-8 md:h-10 rounded-lg md:rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-blue-500 bg-black shadow-[0_0_10px_rgba(59,130,246,0.3)]' : 'border-gray-800 bg-black'}`} />
-                        <button onClick={() => setTheme('light')} className={`flex-1 h-8 md:h-10 rounded-lg md:rounded-xl border-2 transition-all ${theme === 'light' ? 'border-blue-500 bg-white shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'border-gray-800 bg-white'}`} />
+                        <button onClick={() => setTheme('dark')} className={`flex-1 h-8 md:h-10 rounded-lg md:rounded-xl border-2 transition-all ${theme === 'dark' ? 'border-blue-500 bg-black' : 'border-gray-800 bg-black'}`} />
+                        <button onClick={() => setTheme('light')} className={`flex-1 h-8 md:h-10 rounded-lg md:rounded-xl border-2 transition-all ${theme === 'light' ? 'border-blue-500 bg-white' : 'border-gray-800 bg-white'}`} />
                       </div>
                     </div>
                     <div>
@@ -238,7 +259,7 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
                       <p className="text-[9px] md:text-[10px] font-black text-gray-500 mb-2 md:mb-3 uppercase text-center tracking-widest">Каподастр</p>
                       <div className="grid grid-cols-5 gap-1 md:gap-2">
                         {[0, 1, 4, 6, 9].map((val) => (
-                          <button key={val} onClick={() => setCapo(val)} className={`flex flex-col items-center justify-center h-10 md:h-12 rounded-lg md:rounded-xl border transition-all ${capo === val ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-[#151515] border-gray-800 text-gray-400 hover:border-gray-600'}`}>
+                          <button key={val} onClick={() => setCapo(val)} className={`flex flex-col items-center justify-center h-10 md:h-12 rounded-lg md:rounded-xl border transition-all ${capo === val ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-[#151515] border-gray-800 text-gray-400'}`}>
                             <span className="text-[11px] md:text-[12px] font-black">{val === 0 ? 'Ø' : val}</span>
                             <span className="text-[7px] md:text-[8px] font-bold mt-0.5 opacity-40">{getCapoKeyLabel(val)}</span>
                           </button>
@@ -258,24 +279,19 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
 
                     <div className="pt-4 md:pt-5 mt-4 md:mt-5 border-t border-gray-800">
                       {userId ? (
-                        <button onClick={downloadPDF} className="w-full py-2.5 md:py-3.5 rounded-lg md:rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-[8px] md:text-[9px] uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <button onClick={downloadPDF} className="w-full py-2.5 md:py-3.5 rounded-lg md:rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-[8px] md:text-[9px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2">
                           Завантажити PDF
                         </button>
                       ) : (
-                        <div className="p-2 md:p-3 rounded-lg md:rounded-xl bg-[#0a0a0a] border border-dashed border-gray-800 text-center">
-                          <p className="text-[7px] md:text-[8px] font-bold text-gray-500 uppercase leading-relaxed tracking-widest">Увійдіть, щоб експортувати</p>
-                          <Link href="/login" className="text-[8px] md:text-[9px] text-blue-500 font-black uppercase mt-1 md:mt-2 block hover:underline tracking-widest">Увійти →</Link>
-                        </div>
+                        <Link href="/login" className="text-[8px] md:text-[9px] text-blue-500 font-black uppercase mt-1 text-center block hover:underline tracking-widest">Увійдіть для експорту →</Link>
                       )}
                     </div>
                   </div>
                 </div>
               )}
             </div>
-            <button onClick={() => setIsEditing(!isEditing)} className="px-4 py-2 md:px-8 md:py-3.5 rounded-full text-[9px] md:text-[11px] font-black bg-white text-black uppercase tracking-widest active:scale-95 transition-all">
-              <span className="hidden sm:inline">{isEditing ? 'ГОТОВО' : 'РЕДАГУВАТИ'}</span>
-              <span className="sm:hidden">{isEditing ? '✓' : 'РЕД.'}</span>
+            <button onClick={() => setIsEditing(!isEditing)} className="px-4 py-2 md:px-8 md:py-3.5 rounded-full text-[9px] md:text-[11px] font-black bg-white text-black uppercase tracking-widest transition-all">
+              {isEditing ? 'ГОТОВО' : 'РЕДАГУВАТИ'}
             </button>
           </div>
         </div>
@@ -284,18 +300,22 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
           {songs[currentIndex] && (
             <SongView 
               key={`${setlistId}-${songs[currentIndex].id}`} 
-              songId={songs[currentIndex].id} initialContent={songs[currentIndex].content || ""} 
-              setlistId={Number(setlistId)} youtubeUrl={songs[currentIndex].youtube_url}
-              theme={theme} fontSizeLevel={fontSizeLevel} capo={capo} semitones={semitones} 
+              songId={songs[currentIndex].id} 
+              initialContent={songs[currentIndex].content || ""} 
+              youtubeUrl={songs[currentIndex].youtube_url}
+              theme={theme} 
+              fontSizeLevel={fontSizeLevel} 
+              capo={capo} 
+              semitones={semitones} 
             />
           )}
         </div>
       </div>
 
-      <div className={`fixed right-0 top-0 h-full w-full md:w-[350px] bg-[#080808] border-l border-gray-800 transition-transform duration-500 ease-in-out z-[100] p-4 md:p-6 flex flex-col print:hidden ${isEditing ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed right-0 top-0 h-full w-full md:w-[350px] bg-[#080808] border-l border-gray-800 transition-transform duration-500 z-[100] p-4 md:p-6 flex flex-col print:hidden ${isEditing ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex justify-between items-center mb-6 md:mb-8">
             <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 font-mono">Редагування</h3>
-            <button onClick={() => setIsEditing(false)} className="md:hidden text-gray-500 font-bold p-2 text-xl">×</button>
+            <button onClick={() => setIsEditing(false)} className="md:hidden text-gray-500 p-2 text-xl">×</button>
         </div>
         <div className="mb-6 md:mb-8">
             <div className="relative">
@@ -312,35 +332,17 @@ export default function SetlistPage({ params }: { params: Promise<{ id: string }
                 )}
             </div>
         </div>
-        <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 mb-3 md:mb-4 font-mono">Черга</h3>
-        <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 pr-1 md:pr-2 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 pr-1 custom-scrollbar">
           {songs.map((s, index) => (
-            <div key={s.id} className={`flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-xl border transition-all duration-300 ${index === currentIndex ? 'bg-blue-900/20 border-blue-500/50' : 'bg-[#111] border-gray-900'}`}>
-              
-              {/* КНОПКИ ДЛЯ ПЕРЕМЕЩЕНИЯ (ВВЕРХ/ВНИЗ) */}
+            <div key={s.id} className={`flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-xl border transition-all ${index === currentIndex ? 'bg-blue-900/20 border-blue-500/50' : 'bg-[#111] border-gray-900'}`}>
               <div className="flex flex-col items-center">
-                <button 
-                  onClick={() => moveSong(index, 'up')} 
-                  disabled={index === 0} 
-                  className="p-1 text-gray-600 hover:text-white disabled:opacity-20 transition"
-                  title="Підняти вище"
-                >
-                  ▲
-                </button>
-                <button 
-                  onClick={() => moveSong(index, 'down')} 
-                  disabled={index === songs.length - 1} 
-                  className="p-1 text-gray-600 hover:text-white disabled:opacity-20 transition"
-                  title="Опустити нижче"
-                >
-                  ▼
-                </button>
+                <button onClick={() => moveSong(index, 'up')} disabled={index === 0} className="p-1 text-gray-600 hover:text-white disabled:opacity-20">▲</button>
+                <button onClick={() => moveSong(index, 'down')} disabled={index === songs.length - 1} className="p-1 text-gray-600 hover:text-white disabled:opacity-20">▼</button>
               </div>
-
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setCurrentIndex(index)}>
                 <p className={`text-[11px] md:text-[13px] font-bold truncate ${index === currentIndex ? 'text-blue-500' : 'text-gray-300'}`}>{s.title}</p>
               </div>
-              <button onClick={() => removeSong(s.id)} className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-red-900/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-sm md:text-lg leading-none">×</button>
+              <button onClick={() => removeSong(s.id)} className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-red-900/10 text-red-500 hover:bg-red-500 hover:text-white transition-all">×</button>
             </div>
           ))}
         </div>
