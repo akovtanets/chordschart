@@ -9,12 +9,20 @@ export default function SongsPage() {
   const [songs, setSongs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  
+  // Додаємо стейт для користувача
+  const [user, setUser] = useState<any>(null);
 
-  // Загрузка всех песен из базы
   useEffect(() => {
+    // Отримуємо поточного користувача
+    const getUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    };
+
+    // Завантажуємо всі пісні з бази
     const fetchSongs = async () => {
       setLoading(true);
-      // Обязательно выбираем youtube_url, чтобы плеер его увидел
       const { data, error } = await supabase
         .from("songs")
         .select("*")
@@ -26,10 +34,18 @@ export default function SongsPage() {
       setLoading(false);
     };
 
+    getUser();
     fetchSongs();
+
+    // Підписуємося на зміни стану авторизації (якщо користувач увійде/вийде на цій же сторінці)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Логика поиска
+  // Логіка пошуку
   const filteredSongs = songs.filter((song) =>
     song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (song.author && song.author.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -38,7 +54,7 @@ export default function SongsPage() {
   return (
     <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-5xl mx-auto">
-        {/* Заголовок и поиск */}
+        {/* Заголовок і пошук */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <h1 className="text-3xl font-black uppercase tracking-tighter">Всі пісні</h1>
           
@@ -55,12 +71,15 @@ export default function SongsPage() {
             </svg>
           </div>
 
-          <Link 
-            href="/add-song" 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold transition-all text-center"
-          >
-            + Додати
-          </Link>
+          {/* Показуємо кнопку ДОДАТИ лише якщо є user */}
+          {user && (
+            <Link 
+              href="/add-song" 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold transition-all text-center"
+            >
+              + Додати
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -84,29 +103,31 @@ export default function SongsPage() {
                 </Link>
 
                 <div className="flex items-center gap-4">
-                  {/* КАТЕГОРИЯ (если есть) */}
+                  {/* КАТЕГОРІЯ (якщо є) */}
                   {song.category && (
                     <span className="hidden sm:block text-[10px] uppercase tracking-widest text-gray-600 bg-gray-900 px-2 py-1 rounded">
                       {song.category}
                     </span>
                   )}
 
-                  {/* YOUTUBE ПЛЕЕР СПРАВА */}
+                  {/* YOUTUBE ПЛЕЄР */}
                   {song.youtube_url && (
                     <div className="w-12 h-12 flex-shrink-0">
                       <YouTubePlayer url={song.youtube_url} />
                     </div>
                   )}
 
-                  {/* КНОПКА РЕДАКТИРОВАНИЯ */}
-                  <Link 
-                    href={`/edit-song/${song.id}`}
-                    className="p-2 text-gray-600 hover:text-white transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </Link>
+                  {/* Показуємо кнопку РЕДАГУВАТИ лише якщо є user */}
+                  {user && (
+                    <Link 
+                      href={`/edit-song/${song.id}`}
+                      className="p-2 text-gray-600 hover:text-white transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}

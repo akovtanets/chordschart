@@ -15,7 +15,6 @@ export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Перевірка авторизації та відстеження стану
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -26,16 +25,12 @@ export default function Navbar() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-
-      if (event === "SIGNED_OUT") {
-        router.push("/");
-      }
+      if (event === "SIGNED_OUT") router.push("/");
     });
 
     return () => subscription.unsubscribe();
   }, [router]);
 
-  // Логіка пошуку
   useEffect(() => {
     const fetchSongs = async () => {
       const trimmedQuery = searchQuery.trim();
@@ -45,11 +40,7 @@ export default function Navbar() {
         return;
       }
 
-      const { data } = await supabase
-        .from("songs")
-        .select("id, title")
-        .ilike("title", `${trimmedQuery}%`) 
-        .limit(5);
+      const { data } = await supabase.from("songs").select("id, title").ilike("title", `${trimmedQuery}%`).limit(5);
 
       if (data) {
         setResults(data);
@@ -61,7 +52,6 @@ export default function Navbar() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Закриття пошуку при кліку зовні
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -80,62 +70,46 @@ export default function Navbar() {
   if (pathname.startsWith('/setlists/')) return null;
 
   return (
-    <header className="w-full bg-white border-b border-gray-200 h-[65px] flex items-center shadow-sm sticky top-0 z-50">
-      <div className="w-full px-6 flex items-center justify-between">
+    <header className="w-full bg-white border-b border-gray-200 min-h-[60px] md:h-[65px] flex items-center shadow-sm sticky top-0 z-50 print:border-none print:shadow-none py-2 md:py-0">
+      <div className="w-full px-4 md:px-6 flex items-center justify-between gap-2 md:gap-4">
         
         {/* LEFT: Логотип */}
         <div className="flex-shrink-0 flex items-center">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative w-8 h-8 flex items-center justify-center bg-[#0090ff] rounded-lg shadow-lg group-hover:bg-[#007cdb] transition-colors">
-              <svg 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="white" 
-                strokeWidth="2.5" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className="w-5 h-5"
-              >
+          <Link href="/" className="flex items-center gap-1.5 md:gap-2 group">
+            <div className="relative w-7 h-7 md:w-8 md:h-8 flex items-center justify-center bg-[#0090ff] rounded-md md:rounded-lg shadow-lg group-hover:bg-[#007cdb] transition-colors">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5">
                 <path d="M12 2L7 22h10L12 2z" />
                 <path d="M12 18l-2-9" className="animate-[ping_1.5s_infinite]" />
                 <circle cx="10" cy="9" r="1" fill="white" />
               </svg>
             </div>
-            <span className="text-black font-black italic text-xl tracking-tighter ml-1">
+            <span className="text-black font-black italic text-lg md:text-xl tracking-tighter">
               CHORDS<span className="text-[#0090ff] not-italic">CHART</span>
             </span>
           </Link>
         </div>
 
-        {/* CENTER: Search */}
-        <div className="flex-1 flex justify-center px-10 relative" ref={dropdownRef}>
+        {/* CENTER: Search (Зменшені відступи для мобільних) */}
+        <div className="flex-1 flex justify-center px-2 md:px-10 relative print:hidden" ref={dropdownRef}>
           <div className="relative w-full max-w-lg group">
             <input 
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => searchQuery.length >= 2 && setIsDropdownOpen(true)}
-              placeholder="Шукати пісню за назвою..." 
-              className="w-full bg-[#f2f2f2] border-none rounded-full py-2 px-10 text-[13px] text-black placeholder-[#999] focus:ring-2 focus:ring-[#0090ff33] outline-none transition-all"
+              placeholder="Шукати..." 
+              className="w-full bg-[#f2f2f2] border-none rounded-full py-1.5 md:py-2 px-8 md:px-10 text-[11px] md:text-[13px] text-black placeholder-[#999] focus:ring-2 focus:ring-[#0090ff33] outline-none transition-all"
             />
-            <svg className="w-4 h-4 absolute left-3.5 top-2.5 text-[#999] group-focus-within:text-[#0090ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 md:w-4 md:h-4 absolute left-3 md:left-3.5 top-2 md:top-2.5 text-[#999] group-focus-within:text-[#0090ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
 
             {isDropdownOpen && results.length > 0 && (
-              <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-2xl mt-2 shadow-2xl py-2 z-[100] overflow-hidden">
+              <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-xl md:rounded-2xl mt-2 shadow-2xl py-2 z-[100] overflow-hidden">
                 {results.map((song) => (
-                  <button
-                    key={song.id}
-                    onClick={() => {
-                      router.push(`/song/${song.id}`);
-                      setSearchQuery("");
-                      setIsDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-5 py-3 hover:bg-blue-50 text-black text-[13px] font-medium transition-colors border-b border-gray-50 last:border-none flex items-center justify-between group"
-                  >
-                    <span>{song.title}</span>
-                    <span className="text-[#0090ff] opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold">ВІДКРИТИ →</span>
+                  <button key={song.id} onClick={() => { router.push(`/song/${song.id}`); setSearchQuery(""); setIsDropdownOpen(false); }} className="w-full text-left px-4 md:px-5 py-2.5 md:py-3 hover:bg-blue-50 text-black text-[12px] md:text-[13px] font-medium transition-colors border-b border-gray-50 last:border-none flex items-center justify-between group">
+                    <span className="truncate pr-2">{song.title}</span>
+                    <span className="text-[#0090ff] opacity-0 group-hover:opacity-100 transition-opacity text-[9px] md:text-[10px] font-bold flex-shrink-0">ВІДКРИТИ →</span>
                   </button>
                 ))}
               </div>
@@ -144,43 +118,26 @@ export default function Navbar() {
         </div>
 
         {/* RIGHT: Menu & Auth */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 md:gap-6 print:hidden flex-shrink-0">
           <nav className="hidden lg:flex items-center gap-6">
-            <Link href="/songs" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/songs' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>
-              Пісні
-            </Link>
-            
-            {/* ТУТ ЗМІНИ: Сетлісти відображаються тільки для авторизованих */}
-            {user && (
-              <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>
-                Сетлісти
-              </Link>
-            )}
+            <Link href="/songs" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/songs' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Пісні</Link>
+            {user && <Link href="/setlists" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/setlists' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Сетлісти</Link>}
           </nav>
 
           <div className="h-6 w-[1px] bg-gray-200 hidden md:block"></div>
 
           <div className="flex items-center gap-4">
             {user ? (
-              <div className="flex items-center gap-4">
-                <span className="text-[11px] text-gray-400 font-medium lowercase hidden xl:inline">
-                  {user.email}
-                </span>
-                <button 
-                  onClick={handleLogout}
-                  className="text-[#cc0000] text-[12px] font-bold uppercase tracking-widest hover:opacity-70 transition-all"
-                >
-                  Вийти
-                </button>
+              <div className="flex items-center gap-2 md:gap-4">
+                <span className="text-[11px] text-gray-400 font-medium lowercase hidden xl:inline">{user.email}</span>
+                <button onClick={handleLogout} className="text-[#cc0000] text-[10px] md:text-[12px] font-bold uppercase tracking-widest hover:opacity-70 transition-all">Вийти</button>
               </div>
             ) : (
-              <Link href="/login" className="text-[#888] text-[12px] font-bold uppercase tracking-widest hover:text-black transition-colors flex items-center gap-2">
-                <div className="w-8 h-8 border border-gray-200 rounded-full flex items-center justify-center">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                   </svg>
+              <Link href="/login" className="text-[#888] text-[10px] md:text-[12px] font-bold uppercase tracking-widest hover:text-black transition-colors flex items-center gap-1.5 md:gap-2">
+                <div className="w-6 h-6 md:w-8 md:h-8 border border-gray-200 rounded-full flex items-center justify-center">
+                   <svg className="w-3 h-3 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 </div>
-                <span>Login</span>
+                <span className="hidden sm:inline">Login</span>
               </Link>
             )}
           </div>

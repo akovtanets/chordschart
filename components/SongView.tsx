@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import YouTubePlayer from "@/components/YouTubePlayer";
 
@@ -11,145 +11,179 @@ interface SongViewProps {
   initialContent: string;
   setlistId?: number | null;
   youtubeUrl?: string | null;
+  theme: 'dark' | 'light';
+  fontSizeLevel: number;
+  capo: number;
+  semitones: number;
 }
 
-export default function SongView({ songId, initialContent, setlistId = null, youtubeUrl = null }: SongViewProps) {
-  const [semitones, setSemitones] = useState(0);
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+interface SongSection {
+  type: string;
+  lines: string[];
+}
+
+export default function SongView({ 
+  songId, 
+  initialContent, 
+  youtubeUrl = null,
+  theme, 
+  fontSizeLevel, 
+  capo, 
+  semitones 
+}: SongViewProps) {
   const [song, setSong] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
-    const initSettings = async () => {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-
-      const { data: songData } = await supabase.from("songs").select("*").eq("id", songId).single();
-      if (songData) setSong(songData);
-
-      if (currentUser && setlistId) {
-        const { data } = await supabase.from("user_song_settings").select("transposition_offset").eq("setlist_id", setlistId).eq("song_id", songId).maybeSingle();
-        if (data) setSemitones(data.transposition_offset);
-      }
+    const fetchSong = async () => {
+      const { data } = await supabase.from("songs").select("*").eq("id", songId).single();
+      if (data) setSong(data);
       setLoading(false);
     };
-    initSettings();
-  }, [songId, setlistId]);
+    fetchSong();
+  }, [songId]);
 
-  const saveSettings = async (offset: number) => {
-    if (!user || !setlistId) return;
-    await supabase.from("user_song_settings").upsert({
-      user_id: user.id, setlist_id: setlistId, song_id: songId, transposition_offset: offset,
-    }, { onConflict: "user_id,setlist_id,song_id" });
-  };
-
-  const transposeChord = (chord: string, delta: number) => {
+  const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
       let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
-      return NOTES[(index + delta + 120) % 12];
+      const finalDelta = delta - capoOffset;
+      return NOTES[(index + finalDelta + 120) % 12];
     });
   };
 
-  const getStructuredSections = (content: string) => {
-    if (!content) return [];
-    const lines = content.split("\n");
-    const sections: { type: string; lines: string[] }[] = [];
-    const keywords = ["ВСТУП", "ІНТРО", "КУПЛЕТ", "ПРИСПІВ", "БРІДЖ", "ВСТАВКА", "ІНТЕРЛЮД", "КІНЕЦЬ", "INTRO", "VERSE", "CHORUS", "BRIDGE", "OUTRO"];
-    let currentSection: { type: string; lines: string[] } | null = null;
-
-    lines.forEach((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      const upperLine = trimmed.toUpperCase();
-      const isHeader = keywords.some(key => {
-        const regex = new RegExp(`(^|\\d|\\s)${key}(\\b|:|\\s)`, "i");
-        return regex.test(upperLine);
-      });
-
-      if (isHeader && trimmed.length < 30) {
-        if (currentSection) sections.push(currentSection);
-        currentSection = { type: trimmed.replace(/[:]/g, "").trim(), lines: [] };
-      } else {
-        if (!currentSection) currentSection = { type: "ВСТУП", lines: [] };
-        currentSection.lines.push(line);
+  useEffect(() => {
+    const handleScroll = (e: KeyboardEvent) => {
+      if (!scrollContainerRef.current) return;
+      const sections = sectionRefs.current.filter(Boolean);
+      const containerTop = scrollContainerRef.current.getBoundingClientRect().top;
+      
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = sections.find(s => s!.getBoundingClientRect().top > containerTop + 60);
+        if (next) next.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-    });
-    if (currentSection) sections.push(currentSection);
-    return sections;
-  };
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = [...sections].reverse().find(s => s!.getBoundingClientRect().top < containerTop - 60);
+        if (prev) prev.scrollIntoView({ behavior: "smooth", block: "start" });
+        else scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    };
+    window.addEventListener("keydown", handleScroll);
+    return () => window.removeEventListener("keydown", handleScroll);
+  }, [song]);
 
   const RenderLine = ({ line }: { line: string }) => {
     const parts = line.split(/(\[.*?\])/g);
+    const startsWithChord = line.trim().startsWith('[');
+    
+    // Адаптивні розміри для мобільних пристроїв
+    const chordSizes = ["text-[12px] md:text-[14px] print:text-[11px]", "text-[16px] md:text-[18px] print:text-[14px]", "text-[20px] md:text-[22px] print:text-[18px]"];
+    const textSizes = ["text-lg md:text-xl print:text-[16px]", "text-2xl md:text-3xl print:text-[22px]", "text-3xl md:text-4xl print:text-[28px]"];
+    const margins = ["mb-6 md:mb-8 print:mb-5", "mb-10 md:mb-12 print:mb-8", "mb-12 md:mb-14 print:mb-10"];
+    const chordOffsets = ["-top-5 md:-top-6 print:-top-4", "-top-7 md:-top-8 print:-top-6", "-top-9 md:-top-10 print:-top-8"];
+
     return (
-      <div className="flex flex-wrap leading-none mb-6 mt-4 min-h-[1.5rem]">
+      <div className={`flex flex-wrap leading-none ${margins[fontSizeLevel]} ${startsWithChord ? (fontSizeLevel === 0 ? 'mt-6 md:mt-8 print:mt-5' : 'mt-10 md:mt-12 print:mt-8') : 'mt-2 print:mt-1'} min-h-[1.5rem]`}>
         {parts.map((part, i) => {
           if (part.startsWith('[') && part.endsWith(']')) {
-            const chord = transposeChord(part.slice(1, -1), semitones); 
+            const chord = transposeChord(part.slice(1, -1), semitones, capo);
+            const nextPart = parts[i + 1];
+            const hasFollowingText = nextPart && nextPart.length > 0 && nextPart.trim() !== "";
+            
             return (
-              <div key={i} className="relative inline-block mr-6">
-                <span className="absolute -top-5 left-0 font-bold text-blue-400 text-sm font-mono tracking-tighter whitespace-nowrap">{chord}</span>
-                <span className="invisible text-transparent">{" ".repeat(chord.length + 1)}</span>
+              <div key={i} className={`relative inline-block ${!hasFollowingText ? 'min-w-[3.5ch] mr-1 md:mr-2' : ''}`}>
+                <span className={`absolute ${chordOffsets[fontSizeLevel]} left-0 font-bold font-mono tracking-tighter whitespace-nowrap transition-all ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400 print:text-black' : 'text-blue-600 print:text-black'}`}>
+                  {chord}
+                </span>
+                {!hasFollowingText && <span className={`invisible text-transparent font-mono ${textSizes[fontSizeLevel]}`}>{" ".repeat(chord.length)}</span>}
               </div>
             );
           }
-          return <span key={i} className="text-gray-200 font-mono text-lg leading-tight whitespace-pre">{part}</span>;
+          return (
+            <span key={i} className={`font-mono leading-tight whitespace-pre transition-all duration-300 ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-200 print:text-black' : 'text-gray-800 print:text-black'}`}>
+              {part}
+            </span>
+          );
         })}
       </div>
     );
   };
 
-  if (loading) return <div className="p-8 text-gray-600 bg-black h-full font-mono uppercase text-xs">Loading...</div>;
+  if (loading) return <div className="p-8 text-gray-500 bg-black h-full font-mono text-center italic text-xs uppercase tracking-widest">LOADING...</div>;
 
-  const sections = getStructuredSections(song?.content || initialContent);
+  const rawContent = song?.content || initialContent || "";
+  const sections: SongSection[] = rawContent.split("\n\n").map((s: string) => {
+    const lines = s.split("\n");
+    const firstLine = lines[0].toUpperCase();
+    const keywords = ["ВСТУП", "ІНТРО", "КУПЛЕТ", "ПРИСПІВ", "БРІДЖ", "ВСТАВКА", "ІНТЕРЛЮД", "КІНЕЦЬ", "INTRO", "VERSE", "CHORUS", "BRIDGE", "OUTRO"];
+    const isHeader = keywords.some(k => firstLine.includes(k));
+
+    return { 
+      type: isHeader ? lines[0].replace(/:/g, "") : "СЕКЦІЯ", 
+      lines: isHeader ? lines.slice(1) : lines 
+    };
+  });
 
   return (
-    <div className="flex flex-col h-full bg-[#050505] text-white overflow-hidden">
-      <div className="p-6 bg-[#0a0c10] border-b border-gray-900 shadow-2xl flex-shrink-0">
-        <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none italic italic-style mb-2">{song?.title}</h1>
-            <p className="text-lg text-gray-500 font-medium">{song?.author}</p>
+    <div id="song-pdf-area" className={`flex flex-col h-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505] print:bg-white' : 'bg-gray-100 print:bg-white'}`}>
+      
+      {/* ШАПКА ПЕСНИ */}
+      <div className={`p-4 md:p-6 border-b flex-shrink-0 transition-colors duration-500 print:p-0 print:border-none print:mb-8 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl md:shadow-2xl print:bg-white print:shadow-none' : 'bg-white border-gray-200 shadow-sm print:shadow-none'}`}>
+        <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left print:flex-col print:items-center">
+          <div className="print:text-center w-full md:w-auto">
+            {/* Додано break-words та text-2xl для мобільних */}
+            <h1 className={`text-2xl sm:text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-1 break-words ${theme === 'dark' ? 'text-white print:text-black' : 'text-black'}`}>{song?.title}</h1>
+            <p className="text-sm md:text-base text-gray-500 font-medium">{song?.author}</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            {[{ label: "Key", val: song?.default_key, color: "text-blue-400" }, { label: "BPM", val: song?.bpm }, { label: "Time", val: song?.timesig || "4/4" }, { label: "Length", val: song?.length }].map((attr, idx) => (
-              <div key={idx} className="bg-black/50 border border-gray-800 px-4 py-2 rounded-2xl min-w-[80px] text-center">
-                <p className="text-[8px] text-gray-600 uppercase font-black mb-1">{attr.label}</p>
-                <p className={`font-bold font-mono text-sm ${attr.color || "text-white"}`}>{attr.val || "—"}</p>
+
+          {/* Додано flex-wrap щоб плашки переносились на маленьких екранах */}
+          <div className="flex flex-wrap justify-center gap-2 print:mt-4">
+            {[
+              { label: "Key", val: transposeChord(song?.default_key || "C", semitones, 0) }, 
+              { label: "BPM", val: song?.bpm || "—" }, 
+              { label: "Length", val: song?.length || "—" }, 
+              { label: "Capo", val: capo > 0 ? capo : "Ø" }
+            ].map((attr, idx) => (
+              <div key={idx} className={`border px-3 md:px-5 py-1.5 md:py-2 rounded-xl min-w-[60px] md:min-w-[70px] text-center transition-colors duration-500 ${theme === 'dark' ? 'bg-black border-gray-800 text-white print:bg-white print:border-gray-200 print:text-black' : 'bg-gray-50 border-gray-200 text-black'}`}>
+                <p className="text-[6px] md:text-[7px] opacity-50 uppercase font-black mb-0.5 tracking-widest">{attr.label}</p>
+                <p className={`font-bold font-mono text-xs md:text-sm ${attr.label === 'Key' ? (theme === 'dark' ? 'text-blue-400 print:text-blue-600' : 'text-blue-600') : ''}`}>{attr.val}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-6 p-4 bg-[#0a0c10]/50 border-b border-gray-900 z-10 flex-shrink-0">
-        <div className="max-w-[1600px] mx-auto w-full flex items-center gap-6">
-          <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-gray-800">
-            <button onClick={() => { const n = semitones - 1; setSemitones(n); saveSettings(n); }} className="w-10 h-10 hover:bg-gray-800 rounded-lg text-xl">-</button>
-            <div className="text-center min-w-[40px]">
-              <p className="text-[8px] text-gray-600 uppercase font-black">Semitones</p>
-              <p className="font-bold font-mono text-sm text-blue-400">{semitones > 0 ? `+${semitones}` : semitones}</p>
-            </div>
-            <button onClick={() => { const n = semitones + 1; setSemitones(n); saveSettings(n); }} className="w-10 h-10 hover:bg-gray-800 rounded-lg text-xl">+</button>
+      {youtubeUrl && (
+        <div className={`p-2 md:p-3 border-b flex-shrink-0 print:hidden ${theme === 'dark' ? 'bg-[#0a0c10]/50 border-gray-900' : 'bg-white border-gray-200'}`}>
+          <div className="max-w-[1200px] mx-auto overflow-hidden rounded-xl">
+            <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
           </div>
-          <div className="flex-1">{youtubeUrl ? <YouTubePlayer url={youtubeUrl} isFullWidth={true} /> : <div className="h-10 border border-dashed border-gray-800 rounded-xl flex items-center justify-center text-gray-800 text-[10px] uppercase font-bold">YouTube Link Missing</div>}</div>
-          {semitones !== 0 && <button onClick={() => { setSemitones(0); saveSettings(0); }} className="text-[9px] text-gray-600 hover:text-white underline uppercase font-black">Reset</button>}
         </div>
-      </div>
+      )}
 
-      <div className="p-6 md:p-10 overflow-y-auto flex-1 custom-scrollbar">
-        <div className="max-w-[1600px] mx-auto columns-1 lg:columns-2 gap-12 space-y-10">
-          {sections.map((section, idx) => (
-            <div key={idx} className="break-inside-avoid bg-[#0a0c10] border border-gray-900 p-10 rounded-[40px] shadow-2xl transition-all hover:border-gray-700">
-              <div className="flex items-center gap-4 mb-10">
-                <h3 className="text-blue-500 text-[11px] font-black uppercase tracking-[0.4em]">{section.type}</h3>
-                <div className="h-[1px] flex-1 bg-gradient-to-r from-blue-900/40 to-transparent"></div>
+      {/* Зменшено відступи на мобільних */}
+      <div ref={scrollContainerRef} className="p-2 sm:p-4 md:p-10 overflow-y-auto flex-1 custom-scrollbar scroll-smooth print:overflow-visible print:h-auto print:p-0">
+        <div className="max-w-[1200px] mx-auto flex flex-col gap-4 md:gap-8 pb-60 print:pb-0 print:gap-4">
+          {sections.map((section: SongSection, idx: number) => (
+            <div 
+              key={idx} 
+              ref={(el) => { sectionRefs.current[idx] = el; }} 
+              className={`border p-4 sm:p-6 md:p-8 rounded-[20px] md:rounded-[32px] shadow-lg md:shadow-2xl transition-all duration-500 w-full print:border-none print:p-0 print:shadow-none print:bg-transparent ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+            >
+              <div className="flex items-center gap-3 mb-6 md:mb-8 print:mb-4">
+                <h3 className="text-blue-500 text-[9px] md:text-[11px] font-black uppercase tracking-[0.4em] italic print:text-gray-400">{section.type}</h3>
+                <div className={`h-[1px] flex-1 print:bg-gray-100 ${theme === 'dark' ? 'bg-gradient-to-r from-blue-900/30 to-transparent' : 'bg-gray-100'}`}></div>
               </div>
-              <div className="flex flex-col gap-2">
-                {section.lines.map((line, lIdx) => <RenderLine key={lIdx} line={line} />)}
+              <div className="flex flex-col">
+                {section.lines.map((line: string, lIdx: number) => (
+                  <RenderLine key={lIdx} line={line} />
+                ))}
               </div>
             </div>
           ))}

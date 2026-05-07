@@ -26,18 +26,29 @@ export default async function proxy(request: NextRequest) {
     }
   )
 
-  // Використовуємо getSession для стабільності
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Якщо користувач не залогінений і хоче на сторінку пісень
-  if (!session && request.nextUrl.pathname.startsWith('/songs')) {
+  const pathname = request.nextUrl.pathname;
+
+  // Визначаємо шляхи, які доступні ТІЛЬКИ авторизованим користувачам
+  const isProtectedRoute = 
+    pathname.startsWith('/setlists') || 
+    pathname.startsWith('/setlist') || 
+    pathname.startsWith('/add-song') || 
+    pathname.startsWith('/edit-song');
+
+  // Якщо користувач не залогінений і лізе куди не треба — на сторінку логіну
+  if (!session && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // Всі інші маршрути (включно з /songs та /song/[id]) автоматично дозволені
   return response
 }
 
 export const config = {
-  // Захищаємо тільки папку songs та setlists
-  matcher: ['/songs/:path*', '/setlists/:path*'],
+  // Запускаємо middleware на всіх сторінках, окрім системних (статика, картинки, api)
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

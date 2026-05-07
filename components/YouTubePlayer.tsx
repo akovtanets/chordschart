@@ -17,33 +17,43 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
 
   const videoId = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*vExternal\/|v\/|u\/\w\/|embed\/|watch\?v=))([^#\&\?]*)/)?.[1];
 
-  // 1. Метод получения данных через OEmbed (самый надежный)
+  // --- ДОДАНО: Слухаємо натискання пробілу з SetlistPage ---
+  useEffect(() => {
+    const handleTogglePlay = () => {
+      if (!player || typeof player.getPlayerState !== 'function') return;
+
+      const state = player.getPlayerState();
+      if (state === 1) { // 1 = Playing
+        player.pauseVideo();
+      } else {
+        // Зупиняємо інші плеєри перед запуском цього
+        window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
+        player.playVideo();
+      }
+    };
+
+    window.addEventListener("toggle-youtube-play", handleTogglePlay);
+    return () => window.removeEventListener("toggle-youtube-play", handleTogglePlay);
+  }, [player, videoId]);
+  // -------------------------------------------------------
+
   useEffect(() => {
     if (!url) return;
-    
     fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.author_name) {
-          setVideoAuthor(data.author_name);
-        }
+        if (data && data.author_name) setVideoAuthor(data.author_name);
       })
-      .catch(() => {
-        console.log("OEmbed failed, falling back to Player API");
-      });
+      .catch(() => console.log("OEmbed failed"));
   }, [url, videoId]);
 
-  // 2. Метод через Player API (запасной)
   const updateMetadataFromPlayer = (ytPlayer: any) => {
     if (!videoAuthor && ytPlayer && typeof ytPlayer.getVideoData === 'function') {
       const data = ytPlayer.getVideoData();
-      if (data && data.author) {
-        setVideoAuthor(data.author);
-      }
+      if (data && data.author) setVideoAuthor(data.author);
     }
   };
 
-  // 1. Ініціалізація плеєра (Запускається лише ОДИН РАЗ)
   useEffect(() => {
     if (!videoId) return;
 
@@ -56,15 +66,8 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
 
     const init = () => {
       new (window as any).YT.Player(playerRef.current, {
-        height: "1",
-        width: "1",
-        videoId: videoId,
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          modestbranding: 1,
-          rel: 0,
-        },
+        height: "1", width: "1", videoId: videoId,
+        playerVars: { autoplay: 0, controls: 0, modestbranding: 1, rel: 0 },
         events: {
           onReady: (e: any) => {
             setPlayer(e.target);
@@ -83,28 +86,23 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
     if ((window as any).YT && (window as any).YT.Player) {
       init();
     } else {
-      if (!(window as any).YT_API_CALLBACKS) {
-        (window as any).YT_API_CALLBACKS = [];
-      }
+      if (!(window as any).YT_API_CALLBACKS) (window as any).YT_API_CALLBACKS = [];
       (window as any).YT_API_CALLBACKS.push(init);
       (window as any).onYouTubeIframeAPIReady = () => {
         (window as any).YT_API_CALLBACKS.forEach((cb: any) => cb());
       };
     }
-  }, [videoId]); // <--- ОСЬ ГОЛОВНА ФІШКА: Тепер тут ТІЛЬКИ videoId!
+  }, [videoId]);
 
-  // 2. Окремий таймер для повзунка (рухається, коли грає музика)
   useEffect(() => {
     const interval = setInterval(() => {
       if (player && isPlaying && typeof player.getCurrentTime === 'function') {
-        // Запобіжник, щоб не ділити на нуль
         const currentDuration = duration || player.getDuration() || 1;
         setProgress((player.getCurrentTime() / currentDuration) * 100);
       }
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [player, isPlaying, duration]); // videoAuthor убран из зависимостей во избежание ошибок рендера
+  }, [player, isPlaying, duration]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!player) return;
@@ -112,17 +110,17 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
     player.seekTo(time);
     setProgress(parseFloat(e.target.value));
   };
-  // Слухаємо інші плеєри
+
   useEffect(() => {
     const handleStopOthers = (e: any) => {
       if (player && e.detail !== videoId && typeof player.pauseVideo === 'function') {
         player.pauseVideo();
       }
     };
-
     window.addEventListener('stopOtherPlayers', handleStopOthers);
     return () => window.removeEventListener('stopOtherPlayers', handleStopOthers);
   }, [player, videoId]);
+
   const handleRestart = () => {
     if (!player) return;
     player.seekTo(0);
@@ -132,11 +130,7 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
   if (!videoId) return null;
 
   return (
-    <div 
-      className={`flex items-center gap-3 bg-[#1a1d23] border border-gray-800 transition-all shadow-2xl
-        ${isFullWidth ? 'w-full p-3 rounded-2xl' : 'w-[140px] p-2 rounded-xl -translate-x-[100px]'} 
-      `}
-    >
+    <div className={`flex items-center gap-3 bg-[#1a1d23] border border-gray-800 transition-all shadow-2xl ${isFullWidth ? 'w-full p-3 rounded-2xl' : 'w-[140px] p-2 rounded-xl -translate-x-[100px]'}`}>
       <div className="flex items-center gap-2 flex-shrink-0">
         <button 
           onClick={() => {
@@ -157,45 +151,23 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
           )}
         </button>
 
-        <button 
-          onClick={handleRestart}
-          title="Почати спочатку"
-          className="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-full border border-gray-700 transition-all active:scale-95 flex-shrink-0"
-        >
+        <button onClick={handleRestart} title="Почати спочатку" className="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded-full border border-gray-700 transition-all active:scale-95 flex-shrink-0">
           <svg className="w-4 h-4 fill-gray-400" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
         </button>
       </div>
 
       {isFullWidth && (
         <div className="flex-1 flex flex-col justify-center pr-1 min-w-0">
-          <input 
-            type="range" 
-            value={progress} 
-            onChange={handleSeek}
-            className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-1.5"
-          />
-          
+          <input type="range" value={progress} onChange={handleSeek} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 mb-1.5" />
           <div className="flex justify-between items-start px-0.5 gap-4">
             <div className="flex flex-col shrink-0">
-              <span className="text-[7px] text-gray-500 uppercase tracking-tighter font-bold leading-tight">
-                Аудіо: оригінальна тональність
-              </span>
-              {offset !== 0 && (
-                <span className="text-[7px] text-orange-500 font-bold uppercase animate-pulse leading-tight">
-                  ⚠️ Тональність не змінюється
-                </span>
-              )}
+              <span className="text-[7px] text-gray-500 uppercase tracking-tighter font-bold leading-tight">Аудіо: оригінальна тональність</span>
+              {offset !== 0 && <span className="text-[7px] text-orange-500 font-bold uppercase animate-pulse leading-tight">⚠️ Тональність не змінюється</span>}
             </div>
-
-            {/* ВЫВОД АВТОРА */}
             {videoAuthor && (
               <div className="text-right flex flex-col items-end min-w-0">
-                <span className="text-[6px] text-gray-600 uppercase font-black leading-none mb-0.5 tracking-tighter">
-                  Джерело YouTube:
-                </span>
-                <span className="text-[8px] text-blue-400 font-black uppercase tracking-wider italic leading-tight text-right break-words max-w-[150px] sm:max-w-[200px]">
-                  {videoAuthor}
-                </span>
+                <span className="text-[6px] text-gray-600 uppercase font-black leading-none mb-0.5 tracking-tighter">Джерело YouTube:</span>
+                <span className="text-[8px] text-blue-400 font-black uppercase tracking-wider italic leading-tight text-right break-words max-w-[150px] sm:max-w-[200px]">{videoAuthor}</span>
               </div>
             )}
           </div>
