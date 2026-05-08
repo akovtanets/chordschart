@@ -16,7 +16,6 @@ export default function Metronome({ bpm, timeSignature = "4/4" }: MetronomeProps
 
   const beatsPerMeasure = parseInt(timeSignature.split('/')[0]) || 4;
 
-  // Инициализируем контекст заранее, чтобы избежать задержки при первом клике
   useEffect(() => {
     if (typeof window !== "undefined" && !audioContext.current) {
       audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -42,37 +41,64 @@ export default function Metronome({ bpm, timeSignature = "4/4" }: MetronomeProps
   const playTick = (time: number, beat: number) => {
     if (!audioContext.current) return;
 
-    const osc = audioContext.current.createOscillator();
-    const envelope = audioContext.current.createGain();
-    const filter = audioContext.current.createBiquadFilter();
-
-    // ВОЗВРАЩАЕМ ПРИЯТНЫЙ ТЕМБР
-    const frequency = beat === 0 ? 1000 : 500;
-    osc.type = "triangle"; 
-    osc.frequency.setValueAtTime(frequency, time);
-    osc.frequency.exponentialRampToValueAtTime(10, time + 0.06);
-
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(2500, time); // Немного шире фильтр для яркости
-
-    // ГРОМКОСТЬ +20% (1.8 для сильной, 0.7 для слабой)
-    const gainValue = beat === 0 ? 1.8 : 0.7;
+    const ctx = audioContext.current;
     
-    envelope.gain.setValueAtTime(gainValue, time);
-    envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+    // 1. СТВОРЮЄМО ОСНОВНИЙ ТІК (Pitch Drop)
+    const osc = ctx.createOscillator();
+    const envelope = ctx.createGain();
+    
+    const mainFreq = beat === 0 ? 1500 : 1000;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(mainFreq, time);
+    osc.frequency.exponentialRampToValueAtTime(100, time + 0.02);
 
-    osc.connect(filter);
-    filter.connect(envelope);
-    envelope.connect(audioContext.current.destination);
+    // 2. ДОДАЄМО "КЛАТЦАННЯ" ПАЛИЧКИ (Noise Burst)
+    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.02, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseBuffer.length; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
 
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = "highpass";
+    noiseFilter.frequency.setValueAtTime(2500, time);
+
+    const noiseEnvelope = ctx.createGain();
+
+    // НАЛАШТУВАННЯ ГУЧНОСТІ
+    // Збільшено загальну гучність на 20% та акцент ще на 20%
+    const baseGain = 0.6; // Було 0.5 (+20% ≈ 0.6)
+    const accentGain = 1.73; // Було 1.2 (+20% загальна ≈ 1.44, потім ще +20% акцент ≈ 1.73)
+    
+    const currentGain = beat === 0 ? accentGain : baseGain;
+    
+    envelope.gain.setValueAtTime(0, time);
+    envelope.gain.linearRampToValueAtTime(currentGain, time + 0.001);
+    envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+
+    noiseEnvelope.gain.setValueAtTime(0, time);
+    noiseEnvelope.gain.linearRampToValueAtTime(currentGain * 1.8, time + 0.001);
+    noiseEnvelope.gain.exponentialRampToValueAtTime(0.001, time + 0.007);
+
+    // КОМУТАЦІЯ
+    osc.connect(envelope);
+    envelope.connect(ctx.destination);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseEnvelope);
+    noiseEnvelope.connect(ctx.destination);
+
+    // ЗАПУСК
     osc.start(time);
-    osc.stop(time + 0.06);
+    osc.stop(time + 0.04);
+    noise.start(time);
+    noise.stop(time + 0.04);
   };
 
   const toggleMetronome = async () => {
     if (!audioContext.current) return;
-
-    // Сначала пробуждаем контекст
     if (audioContext.current.state === 'suspended') {
       await audioContext.current.resume();
     }
@@ -82,7 +108,6 @@ export default function Metronome({ bpm, timeSignature = "4/4" }: MetronomeProps
       setIsPlaying(false);
     } else {
       beatRef.current = 0;
-      // Даем браузеру 100мс (0.1) на подготовку первого удара
       nextTickTime.current = audioContext.current.currentTime + 0.1;
       scheduleTick();
       setIsPlaying(true);
@@ -90,7 +115,7 @@ export default function Metronome({ bpm, timeSignature = "4/4" }: MetronomeProps
   };
 
   return (
-    <div className="flex items-center gap-3 bg-[#0a0c10] border border-gray-800 rounded-full px-4 py-1.5 shadow-2xl">
+    <div className="flex items-center gap-3 bg-[#0a0c10] border border-gray-800 rounded-full px-4 py-1.5 shadow-2xl print:hidden">
       <div className="flex flex-col">
         <span className="text-[7px] text-blue-500 uppercase font-black tracking-[0.2em] leading-none mb-1">
           {timeSignature}

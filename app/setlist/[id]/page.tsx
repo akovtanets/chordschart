@@ -43,7 +43,6 @@ export default function SetlistPage({ params }: PageProps) {
       const currentUserId = session?.user?.id || null;
       setUserId(currentUserId);
 
-      // 1. Отримуємо команду користувача (перевіряємо будь-яку роль 'admin' або 'leader')
       const { data: teamMembership } = await supabase
         .from("team_members")
         .select("team_id, role")
@@ -53,12 +52,8 @@ export default function SetlistPage({ params }: PageProps) {
       
       if (teamMembership) {
         setUserTeamId(teamMembership.team_id);
-        console.log("✅ Команду знайдено:", teamMembership.team_id);
-      } else {
-        console.log("ℹ️ Користувач не є адміном жодної команди");
       }
 
-      // 2. Завантажуємо дані сетліста
       const { data: setlist, error: setlistError } = await supabase
         .from("setlists")
         .select("*")
@@ -72,13 +67,6 @@ export default function SetlistPage({ params }: PageProps) {
         setIsTeamShared(setlist.is_team_shared || false);
         const ownerCheck = setlist.user_id === currentUserId;
         setIsOwner(ownerCheck);
-
-        console.log("📊 Статус сетліста:", {
-          isOwner: ownerCheck,
-          isTeamShared: setlist.is_team_shared,
-          setlistOwner: setlist.user_id,
-          currentUser: currentUserId
-        });
 
         if (setlist.song_ids && setlist.song_ids.length > 0) {
           const { data: songsData } = await supabase
@@ -109,28 +97,38 @@ export default function SetlistPage({ params }: PageProps) {
     fetchSetlistAndSongs();
   }, [setlistId, fetchSetlistAndSongs]);
 
-  // Перемикач спільного доступу
+  // КЕРУВАННЯ КЛАВІАТУРОЮ (СТРІЛКИ ПРАВО/ЛІВО)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNext();
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPrev();
+      }
+      if (event.code === "Space") {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent("toggle-youtube-play"));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [songs.length, currentIndex]);
+
   const handleToggleShare = async () => {
-    if (!isOwner || !userTeamId) {
-      console.warn("🚫 Недостатньо прав для поширення", { isOwner, userTeamId });
-      return;
-    }
+    if (!isOwner || !userTeamId) return;
     const nextValue = !isTeamShared;
-    
     const { error } = await supabase
       .from("setlists")
-      .update({ 
-        is_team_shared: nextValue,
-        team_id: nextValue ? userTeamId : null 
-      })
+      .update({ is_team_shared: nextValue, team_id: nextValue ? userTeamId : null })
       .eq("id", setlistId);
 
-    if (error) {
-      console.error("❌ Помилка оновлення доступу:", error);
-    } else {
-      setIsTeamShared(nextValue);
-      console.log("📡 Доступ змінено на:", nextValue);
-    }
+    if (!error) setIsTeamShared(nextValue);
   };
 
   useEffect(() => {
@@ -234,6 +232,13 @@ export default function SetlistPage({ params }: PageProps) {
           </div>
 
           <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+            {/* МЕТРОНОМ */}
+            {songs[currentIndex]?.bpm && (
+              <div className="hidden sm:block">
+                <Metronome bpm={parseInt(songs[currentIndex].bpm)} />
+              </div>
+            )}
+
             <div className="relative">
               <button onClick={() => setShowSettings(!showSettings)} className={`w-8 h-8 md:w-11 md:h-11 flex items-center justify-center rounded-full border border-gray-800 bg-[#111] transition-all ${showSettings ? 'bg-blue-600 rotate-90 border-blue-400' : ''}`}>
                 <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -243,24 +248,16 @@ export default function SetlistPage({ params }: PageProps) {
                 <div className="absolute right-0 mt-2 md:mt-3 w-[260px] md:w-72 bg-[#0d0d0d] border border-gray-800 rounded-[24px] md:rounded-[32px] p-4 md:p-6 shadow-2xl z-[100]">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4 md:mb-6 text-center italic">Налаштування</h4>
                   <div className="space-y-4 md:space-y-6">
-                    
-                    {/* КНОПКА ПОШИРЕННЯ (ТІЛЬКИ ДЛЯ ВЛАСНИКА) */}
                     {isOwner && userTeamId && (
                       <div className="pb-4 border-b border-gray-800/50">
-                        <button 
-                          onClick={handleToggleShare}
-                          className={`w-full py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-3 ${
-                            isTeamShared ? 'border-blue-600 bg-blue-600/10 text-blue-400' : 'border-gray-800 bg-black text-gray-500'
-                          }`}
-                        >
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 transition-all flex items-center justify-center ${isTeamShared ? 'border-blue-400 bg-blue-400' : 'border-gray-700'}`}>
+                        <button onClick={handleToggleShare} className={`w-full py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-3 ${isTeamShared ? 'border-blue-600 bg-blue-600/10 text-blue-400' : 'border-gray-800 bg-black text-gray-500'}`}>
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${isTeamShared ? 'border-blue-400 bg-blue-400' : 'border-gray-700'}`}>
                             {isTeamShared && <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>}
                           </div>
                           <span className="text-[10px] font-black uppercase tracking-widest">Для команди</span>
                         </button>
                       </div>
                     )}
-
                     <div>
                       <p className="text-[9px] md:text-[10px] font-black text-gray-500 mb-2 md:mb-3 uppercase text-center tracking-widest">Транспонування</p>
                       <div className="flex items-center gap-1 md:gap-2 bg-black/40 p-1 rounded-lg md:rounded-xl border border-gray-800 text-white">
@@ -269,7 +266,6 @@ export default function SetlistPage({ params }: PageProps) {
                         <button onClick={() => saveSemitones(semitones + 1)} className="flex-1 py-1 hover:bg-gray-800 rounded-md transition">+</button>
                       </div>
                     </div>
-
                     <div>
                         <p className="text-[9px] md:text-[10px] font-black text-gray-500 mb-2 md:mb-3 uppercase text-center tracking-widest">Каподастр</p>
                         <div className="grid grid-cols-5 gap-1 md:gap-2">
@@ -281,7 +277,6 @@ export default function SetlistPage({ params }: PageProps) {
                             ))}
                         </div>
                     </div>
-
                     <div className="pt-4 border-t border-gray-800">
                       <button onClick={downloadPDF} className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-[9px] uppercase tracking-widest">Експорт PDF</button>
                     </div>
@@ -313,7 +308,6 @@ export default function SetlistPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* ПАНЕЛЬ РЕДАГУВАННЯ (Тільки для власника) */}
       <div className={`fixed right-0 top-0 h-full w-full md:w-[350px] bg-[#080808] border-l border-gray-800 transition-transform duration-500 z-[100] p-4 md:p-6 flex flex-col print:hidden ${isEditing && isOwner ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex justify-between items-center mb-6 md:mb-8">
             <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-500 font-mono">Редагування</h3>

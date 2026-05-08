@@ -138,11 +138,23 @@ export default function SongView({
     <div className={`flex flex-col h-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
       {/* Шапка пісні */}
       <div className={`p-4 md:p-6 border-b flex-shrink-0 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'}`}>
-        <div className="max-w-[1200px] mx-auto">
-          {/* Тільки заголовок */}
-          <div className="mb-6 text-center md:text-left">
+        <div className="max-w-[1200px] mx-auto">          
+          {/* Контейнер заголовка пісні */}
+          <div className="mb-6 md:mb-10">
+            {/* Назва пісні */}
             <h1 className={`text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-1 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
-            <p className="text-sm md:text-base text-gray-500 font-medium">{song?.author}</p>
+
+            {/* Блок автора з фіксованою висотою */}
+            <div className="min-h-[1.5rem] md:min-h-[2rem]"> 
+              {song?.author ? (
+                <p className="text-sm md:text-base text-gray-500 font-medium">
+                  {song?.author}
+                </p>
+              ) : (
+                /* Порожній блок, який тримає місце */
+                <div className="h-full w-full"></div>
+              )}
+            </div>
           </div>
 
           {/* Блоки параметрів */}

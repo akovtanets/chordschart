@@ -166,7 +166,6 @@ export default function TeamPage() {
           </div>
           {team && (
             <div className="text-right">
-              <p className="text-[10px] text-gray-600 uppercase font-black tracking-widest mb-1 italic">Active Group</p>
               <p className="text-blue-500 font-black uppercase italic text-2xl md:text-3xl tracking-tighter">{team.name}</p>
             </div>
           )}
