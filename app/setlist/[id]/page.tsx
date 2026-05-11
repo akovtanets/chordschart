@@ -26,6 +26,7 @@ export default function SetlistPage({ params }: PageProps) {
   const setlistId = unwrappedParams.id;
 
   const [songs, setSongs] = useState<Song[]>([]);
+  const [setlistTitle, setSetlistTitle] = useState<string>(""); // ДОДАНО: Стан для назви
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,6 +63,7 @@ export default function SetlistPage({ params }: PageProps) {
       const { data: setlist } = await supabase.from("setlists").select("*").eq("id", setlistId).single();
 
       if (setlist) {
+        setSetlistTitle(setlist.title || "Без назви"); // ДОДАНО: Збереження назви
         setIsTeamShared(setlist.is_team_shared || false);
         setIsOwner(setlist.user_id === currentUserId);
         if (setlist.song_ids?.length > 0) {
@@ -174,7 +176,9 @@ export default function SetlistPage({ params }: PageProps) {
   return (
     <div className={`flex h-screen overflow-hidden transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'}`}>
       <div className={`flex flex-col flex-1 h-full transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''}`}>
-        <div className={`sticky top-0 w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
+        
+        {/* ДОДАНО relative ДЛЯ ЦЕНТРУВАННЯ ЗАГОЛОВКА */}
+        <div className={`sticky top-0 relative w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
           <div className="flex gap-4 items-center">
             <Link href="/setlists" className={`p-2 rounded-lg border transition-colors ${theme === 'dark' ? 'bg-black border-gray-800 text-gray-400 hover:text-blue-500' : 'bg-white border-gray-200 text-gray-600'}`}>←</Link>
             <div className={`flex items-center rounded-lg border p-1 ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>
@@ -184,11 +188,17 @@ export default function SetlistPage({ params }: PageProps) {
             </div>
           </div>
           
+          {/* ДОДАНО: НАЗВА СЕТЛІСТА ПО ЦЕНТРУ */}
+          <div className="absolute left-1/2 -translate-x-1/2 hidden md:block max-w-[40%] pointer-events-none">
+            <h2 className={`text-[10px] font-black uppercase tracking-[0.4em] truncate text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              {setlistTitle}
+            </h2>
+          </div>
+
           <div className="flex items-center gap-3">
             {songs[currentIndex] && <Metronome bpm={songs[currentIndex].bpm || 120} />}
             
             <div className="relative">
-              {/* ВИПРАВЛЕНА ІКОНКА НАЛАШТУВАНЬ */}
               <button 
                 onClick={() => setShowSettings(!showSettings)} 
                 className={`w-10 h-10 flex items-center justify-center rounded-full border transition-all ${showSettings ? 'bg-blue-600 rotate-90 border-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white' : (theme === 'dark' ? 'border-gray-800 bg-[#111] text-white' : 'border-gray-200 bg-white shadow-sm text-black')}`}

@@ -13,29 +13,32 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
   const [duration, setDuration] = useState(0);
   const [videoAuthor, setVideoAuthor] = useState(""); 
   const [player, setPlayer] = useState<any>(null);
-  const playerRef = useRef<HTMLDivElement>(null);
+  
+  // Контейнер, який контролює React
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const videoId = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*vExternal\/|v\/|u\/\w\/|embed\/|watch\?v=))([^#\&\?]*)/)?.[1];
 
-  // --- ДОДАНО: Слухаємо натискання пробілу з SetlistPage ---
+  // Слухаємо натискання пробілу з SetlistPage
   useEffect(() => {
     const handleTogglePlay = () => {
       if (!player || typeof player.getPlayerState !== 'function') return;
-
-      const state = player.getPlayerState();
-      if (state === 1) { // 1 = Playing
-        player.pauseVideo();
-      } else {
-        // Зупиняємо інші плеєри перед запуском цього
-        window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
-        player.playVideo();
+      try {
+        const state = player.getPlayerState();
+        if (state === 1) { // 1 = Playing
+          player.pauseVideo();
+        } else {
+          window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
+          player.playVideo();
+        }
+      } catch (error) {
+        // Ігноруємо можливі внутрішні помилки YouTube API, якщо плеєр ще не повністю готовий
       }
     };
 
     window.addEventListener("toggle-youtube-play", handleTogglePlay);
     return () => window.removeEventListener("toggle-youtube-play", handleTogglePlay);
   }, [player, videoId]);
-  // -------------------------------------------------------
 
   useEffect(() => {
     if (!url) return;
@@ -49,13 +52,46 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
 
   const updateMetadataFromPlayer = (ytPlayer: any) => {
     if (!videoAuthor && ytPlayer && typeof ytPlayer.getVideoData === 'function') {
-      const data = ytPlayer.getVideoData();
-      if (data && data.author) setVideoAuthor(data.author);
+      try {
+        const data = ytPlayer.getVideoData();
+        if (data && data.author) setVideoAuthor(data.author);
+      } catch (error) {}
     }
   };
 
+  // Ініціалізація та знищення плеєра (ВИПРАВЛЕНО ДЛЯ СТАБІЛЬНОСТІ)
   useEffect(() => {
-    if (!videoId) return;
+    if (!videoId || !containerRef.current) return;
+
+    let ytPlayer: any = null;
+    let isMounted = true;
+
+    // Створюємо ізольований елемент для YouTube, щоб він не конфліктував із React DOM
+    const playerEl = document.createElement("div");
+    containerRef.current.appendChild(playerEl);
+
+    const init = () => {
+      ytPlayer = new (window as any).YT.Player(playerEl, {
+        height: "1", width: "1", videoId: videoId,
+        playerVars: { autoplay: 0, controls: 0, modestbranding: 1, rel: 0 },
+        events: {
+          onReady: (e: any) => {
+            if (isMounted) {
+              setPlayer(e.target);
+              setDuration(e.target.getDuration());
+              updateMetadataFromPlayer(e.target);
+            }
+          },
+          onApiChange: (e: any) => isMounted && updateMetadataFromPlayer(e.target),
+          onStateChange: (e: any) => {
+            if (isMounted) {
+              setIsPlaying(e.data === 1);
+              updateMetadataFromPlayer(e.target);
+            }
+          },
+        },
+      });
+    };
 
     if (!(window as any).YT && !document.getElementById("yt-api-script")) {
       const tag = document.createElement("script");
@@ -63,25 +99,6 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
       tag.src = "https://www.youtube.com/iframe_api";
       document.body.appendChild(tag);
     }
-
-    const init = () => {
-      new (window as any).YT.Player(playerRef.current, {
-        height: "1", width: "1", videoId: videoId,
-        playerVars: { autoplay: 0, controls: 0, modestbranding: 1, rel: 0 },
-        events: {
-          onReady: (e: any) => {
-            setPlayer(e.target);
-            setDuration(e.target.getDuration());
-            updateMetadataFromPlayer(e.target);
-          },
-          onApiChange: (e: any) => updateMetadataFromPlayer(e.target),
-          onStateChange: (e: any) => {
-            setIsPlaying(e.data === 1);
-            updateMetadataFromPlayer(e.target);
-          },
-        },
-      });
-    };
 
     if ((window as any).YT && (window as any).YT.Player) {
       init();
@@ -92,29 +109,54 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
         (window as any).YT_API_CALLBACKS.forEach((cb: any) => cb());
       };
     }
+
+    // CLEANUP: Знищуємо плеєр при зміні пісні, щоб не було помилок у терміналі
+    return () => {
+      isMounted = false;
+      if (ytPlayer && typeof ytPlayer.destroy === 'function') {
+        try {
+          ytPlayer.destroy();
+        } catch (e) {}
+      }
+      setPlayer(null);
+      setIsPlaying(false);
+      setProgress(0);
+      
+      // Очищаємо контейнер від старих iframe
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+    };
   }, [videoId]);
 
+  // Оновлення прогресу
   useEffect(() => {
     const interval = setInterval(() => {
       if (player && isPlaying && typeof player.getCurrentTime === 'function') {
-        const currentDuration = duration || player.getDuration() || 1;
-        setProgress((player.getCurrentTime() / currentDuration) * 100);
+        try {
+          const currentDuration = duration || player.getDuration() || 1;
+          setProgress((player.getCurrentTime() / currentDuration) * 100);
+        } catch (error) {}
       }
     }, 1000);
     return () => clearInterval(interval);
   }, [player, isPlaying, duration]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!player) return;
-    const time = (parseFloat(e.target.value) / 100) * duration;
-    player.seekTo(time);
-    setProgress(parseFloat(e.target.value));
+    if (!player || typeof player.seekTo !== 'function') return;
+    try {
+      const time = (parseFloat(e.target.value) / 100) * duration;
+      player.seekTo(time, true);
+      setProgress(parseFloat(e.target.value));
+    } catch (error) {}
   };
 
   useEffect(() => {
     const handleStopOthers = (e: any) => {
       if (player && e.detail !== videoId && typeof player.pauseVideo === 'function') {
-        player.pauseVideo();
+        try {
+          player.pauseVideo();
+        } catch (error) {}
       }
     };
     window.addEventListener('stopOtherPlayers', handleStopOthers);
@@ -122,9 +164,11 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
   }, [player, videoId]);
 
   const handleRestart = () => {
-    if (!player) return;
-    player.seekTo(0);
-    if (!isPlaying) player.playVideo();
+    if (!player || typeof player.seekTo !== 'function') return;
+    try {
+      player.seekTo(0, true);
+      if (!isPlaying) player.playVideo();
+    } catch (error) {}
   };
 
   if (!videoId) return null;
@@ -134,13 +178,15 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
       <div className="flex items-center gap-2 flex-shrink-0">
         <button 
           onClick={() => {
-            if (!player) return;
-            if (isPlaying) {
-              player.pauseVideo();
-            } else {
-              window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
-              player.playVideo();
-            }
+            if (!player || typeof player.getPlayerState !== 'function') return;
+            try {
+              if (isPlaying) {
+                player.pauseVideo();
+              } else {
+                window.dispatchEvent(new CustomEvent('stopOtherPlayers', { detail: videoId }));
+                player.playVideo();
+              }
+            } catch (error) {}
           }}
           className="w-10 h-10 flex items-center justify-center bg-blue-600 rounded-full hover:bg-blue-500 transition-all active:scale-95 flex-shrink-0 shadow-lg"
         >
@@ -174,9 +220,8 @@ export default function YouTubePlayer({ url, isFullWidth = false, offset = 0 }: 
         </div>
       )}
       
-      <div className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none">
-        <div ref={playerRef}></div>
-      </div>
+      {/* Безпечний контейнер для плеєра */}
+      <div className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none" ref={containerRef}></div>
     </div>
   );
 }
