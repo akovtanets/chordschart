@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -13,28 +13,50 @@ function SetlistsListContent() {
   const [lists, setLists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userTeamId, setUserTeamId] = useState<string | null>(null);
   
+  // Зберігаємо список всіх команд, де користувач має право шарити сетлісти (leader або admin)
+  const [userAdminTeams, setUserAdminTeams] = useState<any[]>([]);
+  
+  // Стан для випадаючого меню шарингу (який сетліст зараз відкритий)
+  const [openShareMenuId, setOpenShareMenuId] = useState<string | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement>(null);
+
   const initialDate = dateParam ? new Date(dateParam) : new Date();
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [currentMonth, setCurrentMonth] = useState(initialDate);
+
+  // Закриття меню шарингу при кліку зовні
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(event.target as Node)) {
+        setOpenShareMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const fetchLists = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id || null;
     setUserId(currentUserId);
 
-    // Отримуємо команду користувача (де він адмін)
-    const { data: membership } = await supabase
-      .from("team_members")
-      .select("team_id, role")
-      .eq("user_id", currentUserId)
-      .or('role.ilike.admin,role.ilike.leader')
-      .maybeSingle();
-    
-    if (membership) setUserTeamId(membership.team_id);
+    if (!currentUserId) return;
 
-    // Отримуємо всі доступні команди для фільтрації (членство)
+    // 1. Отримуємо команди, де користувач має право поширювати сетлісти
+    const { data: adminMemberships } = await supabase
+      .from("team_members")
+      .select("team_id, teams(*)")
+      .eq("user_id", currentUserId)
+      .in('role', ['admin', 'leader']); // Шукаємо і admin, і leader про всяк випадок
+    
+    if (adminMemberships) {
+      // Витягуємо самі об'єкти команд
+      const teams = adminMemberships.map(m => Array.isArray(m.teams) ? m.teams[0] : m.teams).filter(Boolean);
+      setUserAdminTeams(teams);
+    }
+
+    // 2. Отримуємо всі команди користувача для фільтрації сетлістів (щоб бачити чужі шарені сетлісти)
     const { data: allMemberships } = await supabase
       .from("team_members")
       .select("team_id")
@@ -42,6 +64,7 @@ function SetlistsListContent() {
     
     const teamIds = allMemberships?.map(m => m.team_id) || [];
 
+    // 3. Формуємо запит на сетлісти
     let query = supabase.from("setlists").select("*");
 
     if (teamIds.length > 0) {
@@ -59,27 +82,27 @@ function SetlistsListContent() {
     fetchLists();
   }, []);
 
-  // Функція для швидкого перемикання доступу прямо зі списку
-  const toggleShare = async (e: React.MouseEvent, listId: string, currentStatus: boolean) => {
-    e.preventDefault(); // Зупиняємо перехід за посиланням
+  // Оновлена функція поширення (тепер приймає конкретний ID команди або null для приватного)
+  const handleShareChange = async (e: React.MouseEvent, listId: string, teamId: string | null) => {
+    e.preventDefault();
     e.stopPropagation();
 
-    if (!userTeamId) return;
+    const isShared = teamId !== null;
 
-    const nextStatus = !currentStatus;
     const { error } = await supabase
       .from("setlists")
       .update({ 
-        is_team_shared: nextStatus,
-        team_id: nextStatus ? userTeamId : null 
+        is_team_shared: isShared,
+        team_id: teamId 
       })
       .eq("id", listId);
 
     if (!error) {
       setLists(prev => prev.map(l => 
-        l.id === listId ? { ...l, is_team_shared: nextStatus, team_id: nextStatus ? userTeamId : null } : l
+        l.id === listId ? { ...l, is_team_shared: isShared, team_id: teamId } : l
       ));
     }
+    setOpenShareMenuId(null); // Закриваємо меню після вибору
   };
 
   const filteredLists = useMemo(() => {
@@ -162,6 +185,8 @@ function SetlistsListContent() {
               filteredLists.map((list: any) => {
                 const isMyList = list.user_id === userId;
                 const isShared = list.is_team_shared;
+                // Знаходимо назву команди, з якою пошарено
+                const sharedTeam = userAdminTeams.find(t => t.id === list.team_id);
 
                 return (
                   <div key={list.id} className="relative group">
@@ -174,7 +199,7 @@ function SetlistsListContent() {
                           <div className="flex items-center gap-2 mb-2">
                             <h2 className="text-2xl font-bold group-hover:text-blue-400 transition-colors uppercase italic tracking-tighter">{list.title}</h2>
                             {!isMyList && (
-                              <span className="px-2 py-0.5 bg-blue-600/10 border border-blue-500/30 text-blue-500 text-[8px] font-black uppercase tracking-tighter rounded-md">Командний</span>
+                              <span className="px-2 py-0.5 bg-blue-600/10 border border-blue-500/30 text-blue-500 text-[8px] font-black uppercase tracking-tighter rounded-md">Від команди</span>
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-[10px] font-black uppercase text-gray-500 tracking-widest">
@@ -184,21 +209,58 @@ function SetlistsListContent() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                          {/* Кнопка "Поділитися" з'являється тільки для власника сетліста та адміна команди */}
-                          {isMyList && userTeamId && (
-                            <button
-                              onClick={(e) => toggleShare(e, list.id, isShared)}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
-                                isShared 
-                                ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
-                                : 'bg-black border-gray-800 text-gray-600 hover:border-gray-600'
-                              }`}
-                            >
-                              <div className={`w-2 h-2 rounded-full ${isShared ? 'bg-blue-500 animate-pulse' : 'bg-gray-800'}`}></div>
-                              <span className="text-[9px] font-black uppercase tracking-widest">
-                                {isShared ? 'Спільний' : 'Приватний'}
-                              </span>
-                            </button>
+                          
+                          {/* БЛОК ШАРИНГУ */}
+                          {isMyList && userAdminTeams.length > 0 && (
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setOpenShareMenuId(openShareMenuId === list.id ? null : list.id);
+                                }}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+                                  isShared 
+                                  ? 'bg-blue-600/10 border-blue-500/40 text-blue-400' 
+                                  : 'bg-black border-gray-800 text-gray-600 hover:border-gray-600'
+                                }`}
+                              >
+                                <div className={`w-2 h-2 rounded-full ${isShared ? 'bg-blue-500 animate-pulse' : 'bg-gray-800'}`}></div>
+                                <span className="text-[9px] font-black uppercase tracking-widest">
+                                  {isShared ? (sharedTeam?.name || 'Спільний') : 'Приватний'}
+                                </span>
+                              </button>
+
+                              {/* ВИПАДАЮЧЕ МЕНЮ ШАРИНГУ */}
+                              {openShareMenuId === list.id && (
+                                <div ref={shareMenuRef} className="absolute right-0 top-full mt-2 w-48 bg-[#111] border border-gray-800 rounded-2xl shadow-2xl py-2 z-50">
+                                  <div className="px-3 py-2 border-b border-gray-800 mb-1">
+                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500">Доступ</span>
+                                  </div>
+                                  
+                                  {/* Опція "Приватний" */}
+                                  <button
+                                    onClick={(e) => handleShareChange(e, list.id, null)}
+                                    className={`w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-between ${!isShared ? 'text-blue-500 bg-blue-600/10' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'}`}
+                                  >
+                                    Лише я
+                                    {!isShared && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                                  </button>
+
+                                  {/* Список команд */}
+                                  {userAdminTeams.map(t => (
+                                    <button
+                                      key={t.id}
+                                      onClick={(e) => handleShareChange(e, list.id, t.id)}
+                                      className={`w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-between ${isShared && list.team_id === t.id ? 'text-blue-500 bg-blue-600/10' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'}`}
+                                    >
+                                      {t.name}
+                                      {isShared && list.team_id === t.id && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
                           
                           <div className="w-10 h-10 rounded-full border border-gray-800 flex items-center justify-center group-hover:bg-blue-600 group-hover:border-blue-600 transition-all shadow-lg">
