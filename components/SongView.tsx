@@ -44,7 +44,6 @@ export default function SongView({
     fetchSong();
   }, [songId]);
 
-  // ПОВЕРНУТО: ПЕРЕМИКАННЯ МІЖ БЛОКАМИ (СТРІЛКИ ВГОРУ/ВНИЗ)
   useEffect(() => {
     const handleScroll = (e: KeyboardEvent) => {
       if (!scrollContainerRef.current) return;
@@ -116,24 +115,67 @@ export default function SongView({
 
   if (loading) return <div className="p-8 text-gray-500 bg-black h-full font-mono text-center italic text-xs uppercase tracking-widest">ЗАВАНТАЖЕННЯ...</div>;
 
+  // ==========================================
+  // НОВИЙ БРОНЕБІЙНИЙ ПАРСЕР (РЯДОК ЗА РЯДКОМ)
+  // ==========================================
   const rawContent: string = song?.content || initialContent || "";
-  const sections: SongSection[] = rawContent.split("\n\n").map((s: string) => {
-    const lines = s.split("\n");
-    const rawHeader = lines[0].toUpperCase().replace(/[:]/g, "").trim();
-    const translationMap: Record<string, string> = {
-      "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", "BRIDGE": "БРІДЖ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
-    };
-    let finalHeader = rawHeader;
-    let isHeader = false;
-    const keywords = ["ВСТУП", "КУПЛЕТ", "ПРИСПІВ", "БРІДЖ", "ВСТАВКА", "КІНЕЦЬ", "ПРОГРАШ", "СОЛО", "ТЕГ", ...Object.keys(translationMap)];
-    if (keywords.some(k => rawHeader.includes(k))) {
-      isHeader = true;
+  
+  const translationMap: Record<string, string> = {
+    "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", 
+    "BRIDGE": "БРІДЖ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", 
+    "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
+    "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
+  };
+  const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
+
+  const sections: SongSection[] = [];
+  let currentSection: SongSection | null = null;
+
+  // Розбиваємо текст на окремі рядки (ігноруючи системні розбіжності Windows/Mac)
+  const lines = rawContent.split(/\r?\n/);
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    
+    // Очищаємо рядок для перевірки (видаляємо дужки)
+    const rawUpper = trimmed.toUpperCase().replace(/[\[\]:]/g, "").trim();
+    const isBracketed = trimmed.startsWith("[") && trimmed.endsWith("]");
+    
+    // Це заголовок, ЯКЩО він у квадратних дужках І містить одне з ключових слів
+    const isHeader = isBracketed && allKeywords.some(k => rawUpper.includes(k));
+
+    if (isHeader) {
+      let finalHeader = rawUpper;
+      
+      // Перекладаємо знайдене слово
       Object.entries(translationMap).forEach(([en, ua]) => {
-        if (finalHeader.includes(en)) finalHeader = finalHeader.replace(en, ua);
+        if (finalHeader.includes(en)) {
+          finalHeader = finalHeader.replace(en, ua);
+        }
       });
+      
+      // Створюємо нову секцію
+      currentSection = { type: finalHeader, lines: [] };
+      sections.push(currentSection);
+    } else {
+      // Якщо це перший рядок і він не заголовок - створюємо дефолтну секцію
+      if (!currentSection) {
+        currentSection = { type: "СЕКЦІЯ", lines: [] };
+        sections.push(currentSection);
+      }
+      
+      // Додаємо рядок тексту (уникаємо порожніх рядків на самому початку блоку)
+      if (trimmed !== "" || currentSection.lines.length > 0) {
+        currentSection.lines.push(line);
+      }
     }
-    return { type: isHeader ? finalHeader : "СЕКЦІЯ", lines: isHeader ? lines.slice(1) : lines };
   });
+
+  // Захист від порожнього контенту
+  if (sections.length === 0) {
+    sections.push({ type: "СЕКЦІЯ", lines: [] });
+  }
+  // ==========================================
 
   return (
     <div className={`flex flex-col h-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
@@ -146,7 +188,6 @@ export default function SongView({
             </div>
           </div>
 
-          {/* СІТКА БЕЗ БЛОКУ ТРАНСПОЗИЦІЇ */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0), color: "text-blue-400" },

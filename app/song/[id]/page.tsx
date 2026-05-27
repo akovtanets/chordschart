@@ -49,21 +49,38 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
 
   const getStructuredSections = (content: string) => {
     if (!content) return [];
+    
+    // ДОДАНО: INSTRUMENTAL
     const translationMap: Record<string, string> = {
       "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", "BRIDGE": "БРІДЖ",
-      "INTERLUDE": "ВСТАВКА", "OUTRO": "КІНЕЦЬ", "SOLO": "ПРОГРАШ", "TAG": "ТЕГ"
+      "INTERLUDE": "ВСТАВКА", "INSTRUMENTAL": "ПРОГРАШ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", "TAG": "ТЕГ"
     };
 
-    return content.split("\n\n").map((s: string) => {
-      const lines = s.split("\n");
-      let rawHeader = lines[0].toUpperCase().replace(/[:]/g, "").trim();
-      const keywords = ["ВСТУП", "ІНТРО", "КУПЛЕТ", "ПРИСПІВ", "БРІДЖ", "ВСТАВКА", "ІНТЕРЛЮД", "КІНЕЦЬ", "INTRO", "VERSE", "CHORUS", "BRIDGE", "OUTRO", "SOLO", "TAG"];
-      const isHeader = keywords.some(k => rawHeader.includes(k));
+    // ВИПРАВЛЕНО: Ріжемо на блоки, ігноруючи невидимі пробіли та Windows-відступи
+    return content.split(/\r?\n\s*\r?\n/).map((s: string) => {
+      const lines = s.split(/\r?\n/);
+      
+      // ВИПРАВЛЕНО: Видаляємо квадратні дужки [] та двокрапки :
+      let rawHeader = lines[0].toUpperCase().replace(/[\[\]:]/g, "").trim();
+      
+      // Автоматично збираємо всі слова зі словника, щоб нічого не забути
+      const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
+      const isHeader = allKeywords.some(k => rawHeader.includes(k));
+      
       let finalHeader = rawHeader;
-      Object.keys(translationMap).forEach(enKey => {
-        if (rawHeader.includes(enKey)) finalHeader = rawHeader.replace(enKey, translationMap[enKey]);
-      });
-      return { type: isHeader ? finalHeader : "КУПЛЕТ", lines: isHeader ? lines.slice(1) : lines };
+      
+      if (isHeader) {
+        Object.keys(translationMap).forEach(enKey => {
+          if (finalHeader.includes(enKey)) {
+            finalHeader = finalHeader.replace(enKey, translationMap[enKey]);
+          }
+        });
+      }
+      
+      return { 
+        type: isHeader ? finalHeader : "СЕКЦІЯ", 
+        lines: isHeader ? lines.slice(1) : lines 
+      };
     });
   };
 

@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export default async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  // 1. Создаем начальный ответ
   let response = NextResponse.next({
     request: { headers: request.headers },
   })
@@ -11,15 +12,16 @@ export default async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) { return request.cookies.get(name)?.value },
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
         set(name: string, value: string, options: CookieOptions) {
+          // ОБНОВЛЯЕМ КУКИ В request И response, НО НЕ ВЫЗЫВАЕМ NextResponse.next()
           request.cookies.set({ name, value, ...options })
-          response = NextResponse.next({ request: { headers: request.headers } })
           response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options })
-          response = NextResponse.next({ request: { headers: request.headers } })
           response.cookies.set({ name, value: '', ...options })
         },
       },
@@ -28,26 +30,21 @@ export default async function proxy(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  const pathname = request.nextUrl.pathname;
-
-  // Визначаємо шляхи, які доступні ТІЛЬКИ авторизованим користувачам
+  const pathname = request.nextUrl.pathname
   const isProtectedRoute = 
     pathname.startsWith('/setlists') || 
     pathname.startsWith('/setlist') || 
     pathname.startsWith('/add-song') || 
-    pathname.startsWith('/edit-song');
+    pathname.startsWith('/edit-song')
 
-  // Якщо користувач не залогінений і лізе куди не треба — на сторінку логіну
   if (!session && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Всі інші маршрути (включно з /songs та /song/[id]) автоматично дозволені
   return response
 }
 
 export const config = {
-  // Запускаємо middleware на всіх сторінках, окрім системних (статика, картинки, api)
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

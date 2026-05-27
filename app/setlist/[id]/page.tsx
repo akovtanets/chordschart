@@ -222,7 +222,7 @@ export default function SetlistPage({ params }: PageProps) {
                     </div>
 
                     <div>
-                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПОНУВАТИ</p>
+                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПОНУВАТИ</p>3£
                       <div className={`flex items-center justify-between px-4 py-2 rounded-xl border ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                         <button onClick={() => saveSemitones(semitones - 1)} className="text-2xl font-bold text-blue-500 hover:scale-110 transition-transform">−</button>
                         <span className="font-bold font-mono text-xl text-blue-400">{semitones > 0 ? `+${semitones}` : semitones}</span>
