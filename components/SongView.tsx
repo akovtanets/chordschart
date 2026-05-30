@@ -32,8 +32,8 @@ export default function SongView({
 }: SongViewProps) {
   const [song, setSong] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const sectionsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchSong = async () => {
@@ -45,30 +45,35 @@ export default function SongView({
   }, [songId]);
 
   useEffect(() => {
-    const handleScroll = (e: KeyboardEvent) => {
-      if (!scrollContainerRef.current) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
-      const sections = sectionRefs.current.filter(Boolean);
-      const containerTop = scrollContainerRef.current.getBoundingClientRect().top;
-      
-      if (e.key === "ArrowDown") {
+  // Улучшенная логика: поиск всех элементов внутри контейнера в момент клика
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const next = sections.find(s => s!.getBoundingClientRect().top > containerTop + 100);
-        if (next) next.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev = [...sections].reverse().find(s => s!.getBoundingClientRect().top < containerTop - 100);
-        if (prev) {
-          prev.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        
+        if (!sectionsContainerRef.current) return;
+        
+        // Находим все блоки секций внутри контейнера
+        const sectionElements = Array.from(sectionsContainerRef.current.querySelectorAll('[data-section="true"]'));
+        const offsets = sectionElements.map(el => el.getBoundingClientRect().top + window.scrollY);
+
+        if (e.key === "ArrowDown") {
+          const next = offsets.find(top => top > window.scrollY + 310); // 310 - сдвиг под хедер
+          if (next !== undefined) window.scrollTo({ top: next - 300, behavior: "smooth" });
+        } else if (e.key === "ArrowUp") {
+          const prev = [...offsets].reverse().find(top => top < window.scrollY + 290);
+          window.scrollTo({ top: prev !== undefined ? prev - 300 : 0, behavior: "smooth" });
         }
       }
     };
-    window.addEventListener("keydown", handleScroll);
-    return () => window.removeEventListener("keydown", handleScroll);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [song, loading]);
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
@@ -115,9 +120,6 @@ export default function SongView({
 
   if (loading) return <div className="p-8 text-gray-500 bg-black h-full font-mono text-center italic text-xs uppercase tracking-widest">ЗАВАНТАЖЕННЯ...</div>;
 
-  // ==========================================
-  // НОВИЙ БРОНЕБІЙНИЙ ПАРСЕР (РЯДОК ЗА РЯДКОМ)
-  // ==========================================
   const rawContent: string = song?.content || initialContent || "";
   
   const translationMap: Record<string, string> = {
@@ -126,63 +128,28 @@ export default function SongView({
     "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
     "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
   };
-  const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
 
-  const sections: SongSection[] = [];
-  let currentSection: SongSection | null = null;
-
-  // Розбиваємо текст на окремі рядки (ігноруючи системні розбіжності Windows/Mac)
-  const lines = rawContent.split(/\r?\n/);
-
-  lines.forEach((line) => {
-    const trimmed = line.trim();
+  const sections: SongSection[] = rawContent.split(/\r?\n\s*\r?\n/).map((s: string) => {
+    const lines = s.split(/\r?\n/);
+    let rawHeader = lines[0].toUpperCase().replace(/[\[\]:]/g, "").trim();
+    const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
+    const isHeader = allKeywords.some(k => rawHeader.includes(k));
     
-    // Очищаємо рядок для перевірки (видаляємо дужки)
-    const rawUpper = trimmed.toUpperCase().replace(/[\[\]:]/g, "").trim();
-    const isBracketed = trimmed.startsWith("[") && trimmed.endsWith("]");
-    
-    // Це заголовок, ЯКЩО він у квадратних дужках І містить одне з ключових слів
-    const isHeader = isBracketed && allKeywords.some(k => rawUpper.includes(k));
-
+    let finalHeader = rawHeader;
     if (isHeader) {
-      let finalHeader = rawUpper;
-      
-      // Перекладаємо знайдене слово
-      Object.entries(translationMap).forEach(([en, ua]) => {
-        if (finalHeader.includes(en)) {
-          finalHeader = finalHeader.replace(en, ua);
-        }
+      Object.keys(translationMap).forEach(enKey => {
+        if (finalHeader.includes(enKey)) finalHeader = finalHeader.replace(enKey, translationMap[enKey]);
       });
-      
-      // Створюємо нову секцію
-      currentSection = { type: finalHeader, lines: [] };
-      sections.push(currentSection);
-    } else {
-      // Якщо це перший рядок і він не заголовок - створюємо дефолтну секцію
-      if (!currentSection) {
-        currentSection = { type: "СЕКЦІЯ", lines: [] };
-        sections.push(currentSection);
-      }
-      
-      // Додаємо рядок тексту (уникаємо порожніх рядків на самому початку блоку)
-      if (trimmed !== "" || currentSection.lines.length > 0) {
-        currentSection.lines.push(line);
-      }
     }
+    return { type: isHeader ? finalHeader : "СЕКЦІЯ", lines: isHeader ? lines.slice(1) : lines };
   });
 
-  // Захист від порожнього контенту
-  if (sections.length === 0) {
-    sections.push({ type: "СЕКЦІЯ", lines: [] });
-  }
-  // ==========================================
-
   return (
-    <div className={`flex flex-col h-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
-      <div className={`p-4 md:p-6 border-b flex-shrink-0 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'}`}>
+    <div className={`min-h-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
+      <div className={`sticky top-0 z-50 p-4 md:p-6 border-b transition-all duration-300 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'}`}>
         <div className="max-w-[1200px] mx-auto">          
-          <div className="mb-6 md:mb-10">
-            <h1 className={`text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-1 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
+          <div className={`mb-1 transition-all duration-300 ${isScrolled ? 'scale-90 origin-left' : 'scale-100'}`}>
+            <h1 className={`font-black uppercase italic tracking-tighter leading-none mb-1 transition-all ${isScrolled ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl'} ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
             <div className="min-h-[1.5rem] md:min-h-[2rem]"> 
               {song?.author ? <p className="text-sm md:text-base text-gray-500 font-medium">{song.author}</p> : <div className="h-full w-full"></div>}
             </div>
@@ -210,16 +177,20 @@ export default function SongView({
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="p-4 md:p-10 overflow-y-auto flex-1 custom-scrollbar scroll-smooth">
-        <div className="max-w-[1200px] mx-auto flex flex-col gap-6 pb-60">
-          {sections.map((section: SongSection, idx: number) => (
-            <div key={idx} ref={(el) => { sectionRefs.current[idx] = el; }} className={`border p-6 md:p-8 rounded-[32px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}>
+      <div ref={sectionsContainerRef} className="relative p-4 md:p-10 flex-grow">
+        <div className="max-w-[1200px] mx-auto flex flex-col gap-6 pb-20">
+          {sections.map((section, idx) => (
+            <div 
+              key={idx} 
+              data-section="true"
+              className={`border p-6 md:p-8 rounded-[32px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+            >
               <div className="flex items-center gap-4 mb-8">
                 <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
                 <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-gray-100'}`}></div>
               </div>
               <div className="flex flex-col">
-                {section.lines.map((line: string, lIdx: number) => <div key={lIdx}>{renderLineContent(line)}</div>)}
+                {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}
               </div>
             </div>
           ))}

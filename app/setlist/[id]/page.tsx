@@ -26,7 +26,7 @@ export default function SetlistPage({ params }: PageProps) {
   const setlistId = unwrappedParams.id;
 
   const [songs, setSongs] = useState<Song[]>([]);
-  const [setlistTitle, setSetlistTitle] = useState<string>(""); // ДОДАНО: Стан для назви
+  const [setlistTitle, setSetlistTitle] = useState<string>(""); 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -63,7 +63,7 @@ export default function SetlistPage({ params }: PageProps) {
       const { data: setlist } = await supabase.from("setlists").select("*").eq("id", setlistId).single();
 
       if (setlist) {
-        setSetlistTitle(setlist.title || "Без назви"); // ДОДАНО: Збереження назви
+        setSetlistTitle(setlist.title || "Без назви");
         setIsTeamShared(setlist.is_team_shared || false);
         setIsOwner(setlist.user_id === currentUserId);
         if (setlist.song_ids?.length > 0) {
@@ -129,13 +129,6 @@ export default function SetlistPage({ params }: PageProps) {
     loadSongSettings();
   }, [currentIndex, userId, setlistId, songs]);
 
-  const handleToggleShare = async () => {
-    if (!isOwner || !userTeamId) return;
-    const nextValue = !isTeamShared;
-    await supabase.from("setlists").update({ is_team_shared: nextValue, team_id: nextValue ? userTeamId : null }).eq("id", setlistId);
-    setIsTeamShared(nextValue);
-  };
-
   const updateDatabase = async (newSongs: Song[]) => {
     if (!isOwner) return;
     const newIds = newSongs.map(s => s.id);
@@ -174,10 +167,11 @@ export default function SetlistPage({ params }: PageProps) {
   if (loading) return <div className="flex h-screen items-center justify-center bg-black text-gray-400 font-mono text-[10px] uppercase">Завантаження...</div>;
 
   return (
-    <div className={`flex h-screen overflow-hidden transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'}`}>
-      <div className={`flex flex-col flex-1 h-full transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''}`}>
+    // Изменено: min-h-screen вместо h-screen, убран overflow-hidden
+    <div className={`min-h-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'}`}>
+      {/* Изменено: убран h-full и overflow-hidden */}
+      <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''}`}>
         
-        {/* ДОДАНО relative ДЛЯ ЦЕНТРУВАННЯ ЗАГОЛОВКА */}
         <div className={`sticky top-0 relative w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
           <div className="flex gap-4 items-center">
             <Link href="/setlists" className={`p-2 rounded-lg border transition-colors ${theme === 'dark' ? 'bg-black border-gray-800 text-gray-400 hover:text-blue-500' : 'bg-white border-gray-200 text-gray-600'}`}>←</Link>
@@ -188,7 +182,6 @@ export default function SetlistPage({ params }: PageProps) {
             </div>
           </div>
           
-          {/* ДОДАНО: НАЗВА СЕТЛІСТА ПО ЦЕНТРУ */}
           <div className="absolute left-1/2 -translate-x-1/2 hidden md:block max-w-[40%] pointer-events-none">
             <h2 className={`text-[10px] font-black uppercase tracking-[0.4em] truncate text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               {setlistTitle}
@@ -220,16 +213,14 @@ export default function SetlistPage({ params }: PageProps) {
                         <button onClick={() => setTheme('light')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${theme === 'light' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>СВІТЛА</button>
                       </div>
                     </div>
-
                     <div>
-                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПОНУВАТИ</p>3£
+                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПОНУВАТИ</p>
                       <div className={`flex items-center justify-between px-4 py-2 rounded-xl border ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                         <button onClick={() => saveSemitones(semitones - 1)} className="text-2xl font-bold text-blue-500 hover:scale-110 transition-transform">−</button>
                         <span className="font-bold font-mono text-xl text-blue-400">{semitones > 0 ? `+${semitones}` : semitones}</span>
                         <button onClick={() => saveSemitones(semitones + 1)} className="text-2xl font-bold text-blue-500 hover:scale-110 transition-transform">+</button>
                       </div>
                     </div>
-
                     <div>
                       <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">КАПОДАСТР</p>
                       <div className="grid grid-cols-5 gap-2">
@@ -240,7 +231,6 @@ export default function SetlistPage({ params }: PageProps) {
                         ))}
                       </div>
                     </div>
-
                     {isOwner && userTeamId && (
                       <button onClick={() => setIsTeamShared(!isTeamShared)} className={`w-full py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-3 ${isTeamShared ? 'border-blue-600 bg-blue-600/10 text-blue-400' : (theme === 'dark' ? 'border-gray-800 bg-black text-gray-500' : 'border-gray-200 bg-white text-gray-400')}`}>
                         <div className={`w-3 h-3 rounded-full ${isTeamShared ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-700'}`}></div>
@@ -261,7 +251,8 @@ export default function SetlistPage({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden h-full">
+        {/* Изменено: убраны ограничения высоты для SongView */}
+        <div className="w-full">
           {songs[currentIndex] && (
             <SongView 
               key={songs[currentIndex].id} 
