@@ -14,6 +14,7 @@ interface SongViewProps {
   fontSizeLevel: number;
   capo: number;
   semitones: number;
+  layoutMode?: 'single' | 'two-column';
 }
 
 interface SongSection {
@@ -28,7 +29,8 @@ export default function SongView({
   theme, 
   fontSizeLevel, 
   capo, 
-  semitones 
+  semitones,
+  layoutMode = 'single'
 }: SongViewProps) {
   const [song, setSong] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -50,21 +52,40 @@ export default function SongView({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Улучшенная логика: поиск всех элементов внутри контейнера в момент клика
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      // ВВЕРХ / ВНИЗ - ПЕРЕЛИСТЫВАНИЕ КОЛОНОК БЕЗ СМЕЩЕНИЙ
+      if (layoutMode === 'two-column' && window.innerWidth >= 768) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const scrollContainer = document.getElementById("two-column-scroll-container");
+          if (!scrollContainer) return;
+          
+          // Идеальная математика: (ширина контейнера + 24px отступа) / 2
+          // Это дает шаг ровно в одну колонку без погрешностей
+          const step = (scrollContainer.clientWidth + 24) / 2;
+          const currentStep = Math.round(scrollContainer.scrollLeft / step);
+
+          if (e.key === "ArrowDown") {
+            scrollContainer.scrollTo({ left: (currentStep + 1) * step, behavior: "smooth" });
+          } else if (e.key === "ArrowUp") {
+            scrollContainer.scrollTo({ left: (currentStep - 1) * step, behavior: "smooth" });
+          }
+        }
+        return; // Блокируем стандартный вертикальный скролл для режима 2 колонок
+      }
+
+      // ВЕРТИКАЛЬНЫЙ СКРОЛЛ (СТАНДАРТ)
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        
         if (!sectionsContainerRef.current) return;
-        
-        // Находим все блоки секций внутри контейнера
         const sectionElements = Array.from(sectionsContainerRef.current.querySelectorAll('[data-section="true"]'));
         const offsets = sectionElements.map(el => el.getBoundingClientRect().top + window.scrollY);
 
         if (e.key === "ArrowDown") {
-          const next = offsets.find(top => top > window.scrollY + 310); // 310 - сдвиг под хедер
+          const next = offsets.find(top => top > window.scrollY + 310);
           if (next !== undefined) window.scrollTo({ top: next - 300, behavior: "smooth" });
         } else if (e.key === "ArrowUp") {
           const prev = [...offsets].reverse().find(top => top < window.scrollY + 290);
@@ -74,7 +95,7 @@ export default function SongView({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [song, loading]);
+  }, [song, loading, layoutMode]);
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
@@ -121,7 +142,6 @@ export default function SongView({
   if (loading) return <div className="p-8 text-gray-500 bg-black h-full font-mono text-center italic text-xs uppercase tracking-widest">ЗАВАНТАЖЕННЯ...</div>;
 
   const rawContent: string = song?.content || initialContent || "";
-  
   const translationMap: Record<string, string> = {
     "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", 
     "BRIDGE": "БРІДЖ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", 
@@ -134,7 +154,6 @@ export default function SongView({
     let rawHeader = lines[0].toUpperCase().replace(/[\[\]:]/g, "").trim();
     const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
     const isHeader = allKeywords.some(k => rawHeader.includes(k));
-    
     let finalHeader = rawHeader;
     if (isHeader) {
       Object.keys(translationMap).forEach(enKey => {
@@ -145,17 +164,18 @@ export default function SongView({
   });
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
-      <div className={`sticky top-0 z-50 p-4 md:p-6 border-b transition-all duration-300 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'}`}>
+    <div className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
+      
+      <div className={`sticky top-0 z-50 p-4 md:p-6 border-b transition-all duration-300 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:relative md:flex-shrink-0' : ''}`}>
         <div className="max-w-[1200px] mx-auto">          
-          <div className={`mb-1 transition-all duration-300 ${isScrolled ? 'scale-90 origin-left' : 'scale-100'}`}>
+          <div className="mb-2 md:mb-4 transition-all duration-300">
             <h1 className={`font-black uppercase italic tracking-tighter leading-none mb-1 transition-all ${isScrolled ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl'} ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
             <div className="min-h-[1.5rem] md:min-h-[2rem]"> 
               {song?.author ? <p className="text-sm md:text-base text-gray-500 font-medium">{song.author}</p> : <div className="h-full w-full"></div>}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 transition-all duration-300 ${isScrolled ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto'}`}>
             {[
               { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0), color: "text-blue-400" },
               { label: "ТЕМП", val: song?.bpm || "—" },
@@ -170,15 +190,60 @@ export default function SongView({
           </div>
 
           {youtubeUrl && (
-            <div className="mt-6 overflow-hidden rounded-2xl shadow-2xl">
+            <div className={`mt-6 overflow-hidden rounded-2xl shadow-2xl transition-all duration-300 ${isScrolled ? 'opacity-0 h-0' : 'opacity-100'}`}>
               <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
             </div>
           )}
         </div>
       </div>
 
-      <div ref={sectionsContainerRef} className="relative p-4 md:p-10 flex-grow">
-        <div className="max-w-[1200px] mx-auto flex flex-col gap-6 pb-20">
+      <div className={`relative flex-grow ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-10'}`}>
+        
+        {/* ИДЕАЛЬНАЯ ЛОГИКА ДЛЯ 2 КОЛОНОК */}
+        {layoutMode === 'two-column' && (
+          <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden">
+            <div
+              id="two-column-scroll-container"
+              // Убраны внутренние padding (px-2), чтобы ширина контейнера (clientWidth)
+              // до миллиметра совпадала с расчетом шага при скролле.
+              className="h-full w-full max-w-[1200px] mx-auto overflow-x-auto overflow-y-hidden custom-scrollbar"
+              style={{
+                columnCount: 2,
+                columnGap: '24px',
+                columnFill: 'auto'
+              }}
+            >
+              {sections.map((section, idx) => (
+                <div
+                  key={idx}
+                  data-section="true"
+                  className={`border p-6 md:p-8 rounded-[32px] shadow-lg mb-6 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+                  style={{
+                    breakInside: 'avoid',
+                    pageBreakInside: 'avoid',
+                    display: 'inline-block',
+                    width: '100%',
+                    verticalAlign: 'top'
+                  }}
+                >
+                  <div className="flex items-center gap-4 mb-8">
+                    <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
+                    <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-gray-100'}`}></div>
+                  </div>
+                  <div className="flex flex-col">
+                    {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Стандартный вид (Всегда на мобилках или на Desktop при режиме 1 колонки) */}
+        <div 
+          className={`max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : ''}`}
+          ref={layoutMode === 'single' ? sectionsContainerRef : null}
+        >
           {sections.map((section, idx) => (
             <div 
               key={idx} 
@@ -195,6 +260,7 @@ export default function SongView({
             </div>
           ))}
         </div>
+
       </div>
     </div>
   );
