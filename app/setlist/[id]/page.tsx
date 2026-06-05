@@ -103,6 +103,7 @@ export default function SetlistPage({ params }: PageProps) {
     }, { onConflict: "user_id,setlist_id,song_id" });
   }, [userId, setlistId, songs, currentIndex]);
 
+  // ВОТ ОН - ТВОЙ ВЕРНУВШИЙСЯ БЛОК!
   useEffect(() => {
     const handleUpdateFromView = (e: any) => saveSemitones(e.detail);
     window.addEventListener('update-song-semitones', handleUpdateFromView);
@@ -115,13 +116,13 @@ export default function SetlistPage({ params }: PageProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      // ВЛЕВО/ВПРАВО ВСЕГДА переключают песни, независимо от режима layout
+      // ВЛЕВО/ВПРАВО ВСЕГДА переключают песни
       if (event.key === "ArrowRight") { event.preventDefault(); goToNext(); }
       if (event.key === "ArrowLeft") { event.preventDefault(); goToPrev(); }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goToNext, goToPrev]); // Зависимость layoutMode удалена
+  }, [goToNext, goToPrev]); 
 
   useEffect(() => {
     const loadSongSettings = async () => {
@@ -173,7 +174,8 @@ export default function SetlistPage({ params }: PageProps) {
     <div className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} ${layoutMode === 'two-column' ? 'md:h-screen md:overflow-hidden md:flex md:flex-col' : 'min-h-screen'}`}>
       <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''} ${layoutMode === 'two-column' ? 'md:flex md:flex-col md:flex-grow md:min-h-0' : ''}`}>
         
-        <div className={`sticky top-0 relative w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:flex-shrink-0' : ''}`}>
+        {/* Идеальный sticky без конфликтующего relative */}
+        <div className={`sticky top-0 w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:flex-shrink-0' : ''}`}>
           <div className="flex gap-4 items-center">
             <Link href="/setlists" className={`p-2 rounded-lg border transition-colors ${theme === 'dark' ? 'bg-black border-gray-800 text-gray-400 hover:text-blue-500' : 'bg-white border-gray-200 text-gray-600'}`}>←</Link>
             <div className={`flex items-center rounded-lg border p-1 ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-white border-gray-200'}`}>

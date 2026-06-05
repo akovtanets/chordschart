@@ -46,9 +46,20 @@ export default function SongView({
     fetchSong();
   }, [songId]);
 
+  // ФИКС ДЕРГАНИЯ: Используем гистерезис (два разных порога)
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      setIsScrolled((prev) => {
+        // Сворачиваем шапку только если проскроллили уверенно вниз (> 150)
+        if (!prev && window.scrollY > 150) return true;
+        // Разворачиваем только если доскроллили почти в самый верх (< 20)
+        if (prev && window.scrollY < 20) return false;
+        return prev;
+      });
+    };
+    
+    // passive: true делает отслеживание скролла более плавным для браузера
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -56,15 +67,13 @@ export default function SongView({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       
-      // ВВЕРХ / ВНИЗ - ПЕРЕЛИСТЫВАНИЕ КОЛОНОК БЕЗ СМЕЩЕНИЙ
+      // ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ (ДЛЯ 2 КОЛОНОК)
       if (layoutMode === 'two-column' && window.innerWidth >= 768) {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
           const scrollContainer = document.getElementById("two-column-scroll-container");
           if (!scrollContainer) return;
           
-          // Идеальная математика: (ширина контейнера + 24px отступа) / 2
-          // Это дает шаг ровно в одну колонку без погрешностей
           const step = (scrollContainer.clientWidth + 24) / 2;
           const currentStep = Math.round(scrollContainer.scrollLeft / step);
 
@@ -74,7 +83,7 @@ export default function SongView({
             scrollContainer.scrollTo({ left: (currentStep - 1) * step, behavior: "smooth" });
           }
         }
-        return; // Блокируем стандартный вертикальный скролл для режима 2 колонок
+        return;
       }
 
       // ВЕРТИКАЛЬНЫЙ СКРОЛЛ (СТАНДАРТ)
@@ -139,7 +148,7 @@ export default function SongView({
     );
   };
 
-  if (loading) return <div className="p-8 text-gray-500 bg-black h-full font-mono text-center italic text-xs uppercase tracking-widest">ЗАВАНТАЖЕННЯ...</div>;
+  if (loading) return <div className="p-8 text-gray-500 bg-black h-full w-full font-mono text-center italic text-xs uppercase tracking-widest">ЗАВАНТАЖЕННЯ...</div>;
 
   const rawContent: string = song?.content || initialContent || "";
   const translationMap: Record<string, string> = {
@@ -164,49 +173,55 @@ export default function SongView({
   });
 
   return (
-    <div className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
+    <div className={`w-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
       
-      <div className={`sticky top-0 z-50 p-4 md:p-6 border-b transition-all duration-300 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-xl' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:relative md:flex-shrink-0' : ''}`}>
-        <div className="max-w-[1200px] mx-auto">          
-          <div className="mb-2 md:mb-4 transition-all duration-300">
-            <h1 className={`font-black uppercase italic tracking-tighter leading-none mb-1 transition-all ${isScrolled ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl'} ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{song?.title}</h1>
-            <div className="min-h-[1.5rem] md:min-h-[2rem]"> 
-              {song?.author ? <p className="text-sm md:text-base text-gray-500 font-medium">{song.author}</p> : <div className="h-full w-full"></div>}
+      <div className={`w-full sticky top-[73px] z-[90] transition-all duration-500 flex-shrink-0 ${theme === 'dark' ? 'bg-[#050505]/95 backdrop-blur-sm border-b border-gray-900' : 'bg-gray-100/95 backdrop-blur-sm border-b border-gray-200'} ${layoutMode === 'two-column' ? 'md:relative md:top-0' : ''}`}>
+        <div className={`w-full max-w-[1200px] mx-auto px-4 md:px-6 transition-all duration-500 ${isScrolled ? 'py-3' : 'py-5'}`}>
+          
+          <div className="flex flex-col justify-center">
+            <h1 className={`font-black uppercase italic tracking-tighter leading-none transition-all duration-500 origin-left ${isScrolled ? 'text-2xl scale-95' : 'text-3xl md:text-5xl scale-100'} ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
+              {song?.title}
+            </h1>
+            
+            <div className={`transition-all duration-500 overflow-hidden ${isScrolled ? 'max-h-0 opacity-0' : 'max-h-[30px] opacity-100 mt-1'}`}>
+              <p className="text-sm md:text-base text-gray-500 font-medium">{song?.author || '\u00A0'}</p>
             </div>
           </div>
-
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 transition-all duration-300 ${isScrolled ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto'}`}>
-            {[
-              { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0), color: "text-blue-400" },
-              { label: "ТЕМП", val: song?.bpm || "—" },
-              { label: "КАПО", val: capo > 0 ? capo : "Ø" },
-              { label: "ДОВЖИНА", val: song?.length || "—" }
-            ].map((attr, idx: number) => (
-              <div key={idx} className={`border px-4 py-2.5 rounded-2xl flex flex-col justify-center text-center ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                <p className="text-[9px] text-gray-500 uppercase font-black mb-1 tracking-widest">{attr.label}</p>
-                <p className={`font-bold font-mono text-xl ${attr.color || (theme === 'dark' ? 'text-white' : 'text-black')}`}>{attr.val}</p>
-              </div>
-            ))}
-          </div>
-
-          {youtubeUrl && (
-            <div className={`mt-6 overflow-hidden rounded-2xl shadow-2xl transition-all duration-300 ${isScrolled ? 'opacity-0 h-0' : 'opacity-100'}`}>
-              <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
+          
+          <div className={`transition-all duration-500 overflow-hidden ${isScrolled ? 'max-h-0 opacity-0 mt-0' : 'max-h-[200px] opacity-100 mt-4'}`}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "ТОНАЛЬНІСТЬ", val: transposeChord(song?.default_key || "C", semitones, 0), color: "text-blue-400" },
+                { label: "ТЕМП", val: song?.bpm || "—" },
+                { label: "КАПО", val: capo > 0 ? capo : "Ø" },
+                { label: "ДОВЖИНА", val: song?.length || "—" }
+              ].map((attr, idx: number) => (
+                <div key={idx} className={`border px-4 py-2.5 rounded-2xl flex flex-col justify-center text-center ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-800' : 'bg-white border-gray-200'}`}>
+                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1 tracking-widest">{attr.label}</p>
+                  <p className={`font-bold font-mono text-xl ${attr.color || (theme === 'dark' ? 'text-white' : 'text-black')}`}>{attr.val}</p>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+          
         </div>
       </div>
 
-      <div className={`relative flex-grow ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-10'}`}>
+      {youtubeUrl && (
+        <div className="w-full max-w-[1200px] mx-auto px-4 md:px-6 flex-shrink-0">
+          <div className={`w-full overflow-hidden rounded-2xl shadow-2xl transition-all duration-500 ${isScrolled ? 'max-h-0 opacity-0 mt-0' : 'max-h-[500px] opacity-100 mt-6'}`}>
+            <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
+          </div>
+        </div>
+      )}
+
+      <div className={`relative flex-grow w-full ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-10'}`}>
         
-        {/* ИДЕАЛЬНАЯ ЛОГИКА ДЛЯ 2 КОЛОНОК */}
         {layoutMode === 'two-column' && (
           <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden">
             <div
               id="two-column-scroll-container"
-              // Убраны внутренние padding (px-2), чтобы ширина контейнера (clientWidth)
-              // до миллиметра совпадала с расчетом шага при скролле.
-              className="h-full w-full max-w-[1200px] mx-auto overflow-x-auto overflow-y-hidden custom-scrollbar"
+              className="h-full w-full max-w-[1200px] mx-auto overflow-x-auto overflow-y-hidden custom-scrollbar px-2"
               style={{
                 columnCount: 2,
                 columnGap: '24px',
@@ -239,9 +254,8 @@ export default function SongView({
           </div>
         )}
 
-        {/* Стандартный вид (Всегда на мобилках или на Desktop при режиме 1 колонки) */}
         <div 
-          className={`max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : ''}`}
+          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : ''}`}
           ref={layoutMode === 'single' ? sectionsContainerRef : null}
         >
           {sections.map((section, idx) => (
