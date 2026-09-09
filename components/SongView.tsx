@@ -129,7 +129,7 @@ export default function SongView({
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
-      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab");
+      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("G#", "Ab");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
       const finalDelta = delta - capoOffset;
