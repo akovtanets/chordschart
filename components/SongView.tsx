@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import YouTubePlayer from "@/components/YouTubePlayer";
 
-const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const NOTES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
 
 interface SongViewProps {
   songId: number;
@@ -129,7 +129,7 @@ export default function SongView({
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
-      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("G#", "Ab");
+      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
       const finalDelta = delta - capoOffset;
@@ -296,7 +296,7 @@ export default function SongView({
                 <div
                   key={idx}
                   data-section="true"
-                  className={`border p-6 md:p-8 rounded-[32px] shadow-lg mb-6 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+                  className={`border p-3 md:p-4 rounded-[16px] shadow-lg mb-6 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
                   style={{
                     breakInside: 'avoid',
                     pageBreakInside: 'avoid',
@@ -326,7 +326,7 @@ export default function SongView({
             <div 
               key={idx} 
               data-section="true"
-              className={`border p-6 md:p-8 rounded-[32px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+              className={`border p-3 md:p-4 rounded-[16px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
             >
               <div className="flex items-center gap-4 mb-8">
                 <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
