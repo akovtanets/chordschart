@@ -21,7 +21,7 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
   const [volume, setVolume] = useState(1); // від 0 до 1
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const NOTES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
   useEffect(() => {
     const fetchData = async () => {
