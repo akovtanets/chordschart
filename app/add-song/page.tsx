@@ -16,13 +16,13 @@ export default function AddSongPage() {
   const [length, setLength] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // Відстежуємо, який саме блок зараз завантажується
-  const [parsingType, setParsingType] = useState<"pdf" | "docx" | null>(null);
+  // Додали підтримку "jpg" в стейт завантаження
+  const [parsingType, setParsingType] = useState<"pdf" | "docx" | "jpg" | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
   const router = useRouter();
 
-  const handleAiUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "pdf" | "docx") => {
+  const handleAiUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "pdf" | "docx" | "jpg") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -41,7 +41,6 @@ export default function AddSongPage() {
         setAuthor(data.author || "");
         setSongKey(data.key || "");
 
-        // Гнучка обробка контенту (текст або секції)
         if (data.content) {
           setContent(data.content);
         } else if (data.sections && Array.isArray(data.sections)) {
@@ -62,7 +61,7 @@ export default function AddSongPage() {
       alert("Сталася помилка при відправці файлу на сервер.");
     } finally {
       setParsingType(null);
-      e.target.value = ""; // Очищаємо інпут
+      e.target.value = ""; 
     }
   };
 
@@ -112,8 +111,8 @@ export default function AddSongPage() {
     <div className="max-w-2xl mx-auto p-6 bg-black text-white min-h-screen">
       <h1 className="text-2xl font-bold mb-6 italic uppercase tracking-tighter">Додати нову пісню</h1>
       
-      {/* AI Upload Section - Two Distinct Blocks */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      {/* AI Upload Section - Три блоки (PDF, Word, JPG) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         
         {/* PDF Block */}
         <div className="relative">
@@ -139,7 +138,7 @@ export default function AddSongPage() {
               {parsingType === "pdf" ? "⏳" : "📕"}
             </span>
             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-              {parsingType === "pdf" ? "Аналізуємо PDF..." : "Завантажити PDF"}
+              {parsingType === "pdf" ? "Аналізуємо..." : "PDF"}
             </p>
           </label>
         </div>
@@ -168,15 +167,44 @@ export default function AddSongPage() {
               {parsingType === "docx" ? "⏳" : "📘"}
             </span>
             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-              {parsingType === "docx" ? "Аналізуємо Word..." : "Завантажити WORD"}
+              {parsingType === "docx" ? "Аналізуємо..." : "WORD"}
             </p>
           </label>
         </div>
+
+        {/* JPG / PNG Block */}
+        <div className="relative">
+          <input 
+            type="file" 
+            id="jpg-upload"
+            className="hidden" 
+            accept=".jpg,.jpeg,.png" 
+            onChange={(e) => handleAiUpload(e, "jpg")}
+            disabled={parsingType !== null || loading}
+          />
+          <label 
+            htmlFor="jpg-upload"
+            className={`
+              flex flex-col items-center justify-center w-full h-32 
+              border-2 border-dashed rounded-xl cursor-pointer
+              transition-all duration-300 bg-[#0a0a0a]
+              ${parsingType === "jpg" ? "border-green-500 bg-[#0a150a]" : "border-gray-800 hover:border-green-500 hover:bg-[#111]"}
+              ${parsingType !== null && parsingType !== "jpg" ? "opacity-20 cursor-not-allowed" : "opacity-100"}
+            `}
+          >
+            <span className={`text-3xl mb-2 ${parsingType === "jpg" ? "animate-spin" : ""}`}>
+              {parsingType === "jpg" ? "⏳" : "🖼️"}
+            </span>
+            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+              {parsingType === "jpg" ? "Аналізуємо..." : "ФОТО (JPG/PNG)"}
+            </p>
+          </label>
+        </div>
+
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         
-        {/* Ряд: Назва та Автор */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Назва пісні</label>

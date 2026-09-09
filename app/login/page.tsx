@@ -24,25 +24,30 @@ export default function LoginPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!captchaToken) return alert("Будь ласка, зачекайте завантаження капчі");
 
     setLoading(true);
 
     try {
-      // 1. ПЕРЕВІРКА КАПЧІ
-      const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-        body: { token: captchaToken }
+      // 1. НОВА ПЕРЕВІРКА КАПЧІ ЧЕРЕЗ NEXT.JS API
+      const verifyRes = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken })
       });
+      
+      const verification = await verifyRes.json();
 
-      if (verifyError || !verification?.success) {
+      if (!verifyRes.ok || !verification.success) {
         alert("Помилка капчі. Спробуйте ще раз.");
         setLoading(false);
+        setCaptchaToken(null); // Сбрасываем капчу, чтобы виджет перезагрузился
         return;
       }
 
-      // 2. AUTH ДІЯ
+      // 2. AUTH ДІЯ (залишається без змін)
       if (view === "sign_up") {
         const { error } = await supabase.auth.signUp({ 
           email, 
@@ -60,7 +65,7 @@ export default function LoginPage() {
         } else if (data?.session) {
           // Якщо логін успішний
           router.refresh();
-          router.push('/'); // ЗМІНЕНО: перекидаємо на головну
+          router.push('/');
         }
       }
     } catch (err) {
