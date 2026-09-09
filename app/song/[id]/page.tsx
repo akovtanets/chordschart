@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +15,11 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
   const [loading, setLoading] = useState(true);
   const [offset, setOffset] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Стейти для аудіоплеєра та гучності
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1); // від 0 до 1
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const NOTES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
@@ -36,6 +41,25 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
     fetchData();
   }, [id]);
 
+  const toggleAudioPlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+  };
+
   const isOwner = currentUserId && song && currentUserId === song.user_id;
 
   const transposeChord = (chord: string, delta: number) => {
@@ -50,25 +74,19 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
   const getStructuredSections = (content: string) => {
     if (!content) return [];
     
-    // ДОДАНО: INSTRUMENTAL
     const translationMap: Record<string, string> = {
       "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", "BRIDGE": "БРІДЖ",
       "INTERLUDE": "ВСТАВКА", "INSTRUMENTAL": "ПРОГРАШ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", "TAG": "ТЕГ"
     };
 
-    // ВИПРАВЛЕНО: Ріжемо на блоки, ігноруючи невидимі пробіли та Windows-відступи
     return content.split(/\r?\n\s*\r?\n/).map((s: string) => {
       const lines = s.split(/\r?\n/);
-      
-      // ВИПРАВЛЕНО: Видаляємо квадратні дужки [] та двокрапки :
       let rawHeader = lines[0].toUpperCase().replace(/[\[\]:]/g, "").trim();
       
-      // Автоматично збираємо всі слова зі словника, щоб нічого не забути
       const allKeywords = [...Object.keys(translationMap), ...Object.values(translationMap)];
       const isHeader = allKeywords.some(k => rawHeader.includes(k));
       
       let finalHeader = rawHeader;
-      
       if (isHeader) {
         Object.keys(translationMap).forEach(enKey => {
           if (finalHeader.includes(enKey)) {
@@ -128,7 +146,7 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
 
-        {/* Панель параметров (без метронома) */}
+        {/* Панель параметров */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-[#0a0c10] border border-gray-900 rounded-2xl p-4 shadow-xl flex flex-col justify-center">
             <p className="text-[9px] text-gray-600 uppercase font-black mb-2 tracking-widest text-center">Транспонувати</p>
@@ -152,12 +170,56 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
           ))}
         </div>
 
-        {/* Видео */}
+        {/* Аудіо або Відео плеєр з регулюванням гучності */}
         <div className="bg-[#0a0c10] border border-gray-900 rounded-[32px] p-6 shadow-2xl mb-8">
           <div className="flex items-center justify-between mb-4">
-             <p className="text-[10px] text-gray-600 uppercase font-black tracking-widest">Видео</p>
+             <p className="text-[10px] text-gray-600 uppercase font-black tracking-widest">
+               {song.audio_url ? "Аудіозапис (MP3)" : "Відео"}
+             </p>
           </div>
-          {song.youtube_url ? <YouTubePlayer url={song.youtube_url} isFullWidth={true} /> : <div className="h-20 border border-dashed border-gray-900 rounded-2xl flex items-center justify-center text-gray-800 text-[9px] uppercase font-bold tracking-widest">Видео отсутствует</div>}
+
+          {song.audio_url ? (
+            <div className="flex flex-col md:flex-row items-center gap-4 bg-black/40 p-4 rounded-2xl border border-gray-800">
+              <audio 
+                ref={audioRef} 
+                src={song.audio_url} 
+                onEnded={() => setIsPlaying(false)} 
+              />
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <button 
+                  onClick={toggleAudioPlay}
+                  className="w-12 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-lg transition-all shadow-lg shrink-0"
+                >
+                  {isPlaying ? "❚❚" : "▶"}
+                </button>
+                <div className="flex flex-col flex-1">
+                  <span className="text-sm font-bold text-gray-200">{song.title}</span>
+                  <span className="text-xs text-gray-500">{song.author || "Локальний аудіофайл"}</span>
+                </div>
+              </div>
+
+              {/* Слайдер гучності */}
+              <div className="flex items-center gap-2 w-full md:w-48 justify-end px-2">
+                <span className="text-xs text-gray-500">🔊</span>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.01" 
+                  value={volume} 
+                  onChange={handleVolumeChange}
+                  className="w-full accent-blue-500 cursor-pointer h-1 bg-gray-700 rounded-lg"
+                />
+                <span className="text-[10px] font-mono text-gray-400 w-8 text-right">{Math.round(volume * 100)}%</span>
+              </div>
+            </div>
+          ) : song.youtube_url ? (
+            <YouTubePlayer url={song.youtube_url} isFullWidth={true} />
+          ) : (
+            <div className="h-20 border border-dashed border-gray-900 rounded-2xl flex items-center justify-center text-gray-800 text-[9px] uppercase font-bold tracking-widest">
+              Аудіо або відео відсутнє
+            </div>
+          )}
         </div>
 
         {/* Текст песни */}

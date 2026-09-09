@@ -10,13 +10,17 @@ export default function AddSongPage() {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [content, setContent] = useState("");
+  
+  // Додано підтримку вибору джерела аудіо/відео
+  const [sourceType, setSourceType] = useState<"youtube" | "mp3">("youtube");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+
   const [songKey, setSongKey] = useState("");
   const [bpm, setBpm] = useState("");
   const [length, setLength] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // Додали підтримку "jpg" в стейт завантаження
   const [parsingType, setParsingType] = useState<"pdf" | "docx" | "jpg" | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
@@ -75,21 +79,53 @@ export default function AddSongPage() {
     setLoading(true);
 
     try {
-      const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-        body: { token: captchaToken }
+      // Перевірка капчі через наш новий API-роут
+      const verifyRes = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken })
       });
+      
+      const verification = await verifyRes.json();
 
-      if (verifyError || !verification?.success) {
+      if (!verifyRes.ok || !verification.success) {
         alert("Помилка перевірки Cloudflare. Спробуйте ще раз.");
         setLoading(false);
+        setCaptchaToken(null);
         return;
+      }
+
+      let finalAudioUrl = null;
+
+      // Якщо обрано MP3, завантажуємо його в Supabase Storage
+      if (sourceType === "mp3" && audioFile) {
+        const fileExt = audioFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `audio/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("songs-audio") // Назва вашого бакета в Supabase Storage
+          .upload(filePath, audioFile);
+
+        if (uploadError) {
+          alert(`Помилка завантаження аудіо: ${uploadError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("songs-audio")
+          .getPublicUrl(filePath);
+
+        finalAudioUrl = publicUrlData.publicUrl;
       }
 
       const { error } = await supabase.from("songs").insert([{ 
         title, 
         author: author || null, 
         content, 
-        youtube_url: youtubeUrl, 
+        youtube_url: sourceType === "youtube" ? youtubeUrl : null, 
+        audio_url: sourceType === "mp3" ? finalAudioUrl : null,
         default_key: songKey, 
         bpm: bpm || null, 
         length: length || null 
@@ -101,6 +137,7 @@ export default function AddSongPage() {
         router.push("/songs");
       }
     } catch (err) {
+      console.error(err);
       alert("Сталася критична помилка при збереженні.");
     } finally {
       setLoading(false);
@@ -230,15 +267,44 @@ export default function AddSongPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">YouTube Посилання</label>
-          <input
-            type="text"
-            placeholder="https://www.youtube.com/watch?v=..."
-            value={youtubeUrl}
-            onChange={(e) => setYoutubeUrl(e.target.value)}
-            className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
-          />
+        {/* Перемикач джерела аудіо/відео */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Джерело звуку</label>
+            <div className="flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => setSourceType("youtube")} 
+                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'youtube' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
+              >
+                YouTube
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setSourceType("mp3")} 
+                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'mp3' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
+              >
+                MP3 файл
+              </button>
+            </div>
+          </div>
+
+          {sourceType === "youtube" ? (
+            <input
+              type="text"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              className="p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
+            />
+          ) : (
+            <input
+              type="file"
+              accept=".mp3,.wav,.m4a"
+              onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+              className="p-2.5 bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-4">

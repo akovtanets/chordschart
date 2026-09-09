@@ -10,9 +10,15 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
   const songId = unwrappedParams.id;
   
   const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState(""); // ДОДАНО: Стан для автора
+  const [author, setAuthor] = useState(""); 
   const [content, setContent] = useState("");
+  
+  // Додано підтримку вибору джерела аудіо/відео
+  const [sourceType, setSourceType] = useState<"youtube" | "mp3">("youtube");
   const [youtubeUrl, setYoutubeUrl] = useState(""); 
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
+
   const [songKey, setSongKey] = useState("");
   const [bpm, setBpm] = useState("");
   const [length, setLength] = useState("");
@@ -33,9 +39,18 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
 
       if (data) {
         setTitle(data.title);
-        setAuthor(data.author || ""); // ДОДАНО: Завантажуємо автора з бази
+        setAuthor(data.author || ""); 
         setContent(data.content);
-        setYoutubeUrl(data.youtube_url || ""); 
+        
+        // Визначаємо, що саме збережено у пісні
+        if (data.audio_url) {
+          setSourceType("mp3");
+          setExistingAudioUrl(data.audio_url);
+        } else if (data.youtube_url) {
+          setSourceType("youtube");
+          setYoutubeUrl(data.youtube_url);
+        }
+
         setSongKey(data.default_key || "");
         setBpm(data.bpm || "");
         setLength(data.length || "");
@@ -50,40 +65,72 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
     e.preventDefault();
     if (!captchaToken) return;
 
-    setSaving(true); // Використовуємо saving для стану кнопки
+    setSaving(true);
 
     try {
-      // ПЕРЕВІРКА ЧЕРЕЗ EDGE FUNCTION
-      const { data: verification, error: verifyError } = await supabase.functions.invoke('verify-turnstile', {
-        body: { token: captchaToken }
+      // ПЕРЕВІРКА КАПЧІ ЧЕРЕЗ НАШ API-РОУТ
+      const verifyRes = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken })
       });
+      
+      const verification = await verifyRes.json();
 
-      if (verifyError || !verification?.success) {
+      if (!verifyRes.ok || !verification.success) {
         alert("Помилка перевірки Cloudflare. Спробуйте ще раз.");
         setSaving(false);
+        setCaptchaToken(null);
         return;
       }
 
-      // ЯКЩО УСПІШНО — ОНОВЛЮЄМО (Виправлено insert на update)
+      let finalAudioUrl = existingAudioUrl;
+
+      // Якщо під час редагування завантажили новий MP3 файл
+      if (sourceType === "mp3" && audioFile) {
+        const fileExt = audioFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `audio/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("songs-audio")
+          .upload(filePath, audioFile);
+
+        if (uploadError) {
+          alert(`Помилка завантаження аудіо: ${uploadError.message}`);
+          setSaving(false);
+          return;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("songs-audio")
+          .getPublicUrl(filePath);
+
+        finalAudioUrl = publicUrlData.publicUrl;
+      }
+
+      // ОНОВЛЮЄМО ДАНІ В БАЗІ
       const { error } = await supabase
         .from("songs")
         .update({ 
           title, 
           author: author || null, 
           content, 
-          youtube_url: youtubeUrl, 
+          youtube_url: sourceType === "youtube" ? youtubeUrl : null, 
+          audio_url: sourceType === "mp3" ? finalAudioUrl : null,
           default_key: songKey, 
           bpm: bpm || null, 
           length: length || null 
         })
-        .eq("id", songId); // Обов'язково вказуємо яку пісню оновлюємо!
+        .eq("id", songId);
 
       if (error) {
         alert(error.message);
       } else {
-        router.push(`/song/${songId}`); // Краще повертати на сторінку самої пісні після редагування
+        router.push(`/song/${songId}`); 
       }
     } catch (err) {
+      console.error(err);
       alert("Критична помилка при збереженні.");
     } finally {
       setSaving(false);
@@ -123,15 +170,51 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
 
-        <div>
-          <label className="text-xs text-gray-500 uppercase ml-1 font-bold tracking-widest">YouTube Посилання</label>
-          <input
-            type="text"
-            placeholder="https://www.youtube.com/watch?v=..."
-            value={youtubeUrl}
-            onChange={(e) => setYoutubeUrl(e.target.value)}
-            className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
-          />
+        {/* Перемикач джерела аудіо/відео */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <label className="text-xs text-gray-500 uppercase ml-1 font-bold tracking-widest">Джерело звуку</label>
+            <div className="flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => setSourceType("youtube")} 
+                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'youtube' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
+              >
+                YouTube
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setSourceType("mp3")} 
+                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'mp3' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
+              >
+                MP3 файл
+              </button>
+            </div>
+          </div>
+
+          {sourceType === "youtube" ? (
+            <input
+              type="text"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {existingAudioUrl && !audioFile && (
+                <p className="text-xs text-gray-400 ml-1">
+                  Поточний файл: <a href={existingAudioUrl} target="_blank" className="text-blue-400 underline">слухати</a>
+                </p>
+              )}
+              <input
+                type="file"
+                accept=".mp3,.wav,.m4a"
+                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                className="p-2.5 bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-4">

@@ -17,6 +17,7 @@ interface Song {
   content?: string;
   bpm?: number;
   youtube_url?: string;
+  audio_url?: string; // ДОДАНО: підтримка локального аудіофайлу
   default_key?: string;
   length?: string;
 }
@@ -103,7 +104,6 @@ export default function SetlistPage({ params }: PageProps) {
     }, { onConflict: "user_id,setlist_id,song_id" });
   }, [userId, setlistId, songs, currentIndex]);
 
-  // ВОТ ОН - ТВОЙ ВЕРНУВШИЙСЯ БЛОК!
   useEffect(() => {
     const handleUpdateFromView = (e: any) => saveSemitones(e.detail);
     window.addEventListener('update-song-semitones', handleUpdateFromView);
@@ -116,7 +116,6 @@ export default function SetlistPage({ params }: PageProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      // ВЛЕВО/ВПРАВО ВСЕГДА переключают песни
       if (event.key === "ArrowRight") { event.preventDefault(); goToNext(); }
       if (event.key === "ArrowLeft") { event.preventDefault(); goToPrev(); }
     };
@@ -174,7 +173,6 @@ export default function SetlistPage({ params }: PageProps) {
     <div className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} ${layoutMode === 'two-column' ? 'md:h-screen md:overflow-hidden md:flex md:flex-col' : 'min-h-screen'}`}>
       <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''} ${layoutMode === 'two-column' ? 'md:flex md:flex-col md:flex-grow md:min-h-0' : ''}`}>
         
-        {/* Идеальный sticky без конфликтующего relative */}
         <div className={`sticky top-0 w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:flex-shrink-0' : ''}`}>
           <div className="flex gap-4 items-center">
             <Link href="/setlists" className={`p-2 rounded-lg border transition-colors ${theme === 'dark' ? 'bg-black border-gray-800 text-gray-400 hover:text-blue-500' : 'bg-white border-gray-200 text-gray-600'}`}>←</Link>
@@ -226,7 +224,7 @@ export default function SetlistPage({ params }: PageProps) {
                     </div>
 
                     <div>
-                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПОНУВАТИ</p>
+                      <p className="text-[9px] text-gray-500 uppercase font-black mb-3 tracking-widest text-center">ТРАНСПＯНУВАТИ</p>
                       <div className={`flex items-center justify-between px-4 py-2 rounded-xl border ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                         <button onClick={() => saveSemitones(semitones - 1)} className="text-2xl font-bold text-blue-500 hover:scale-110 transition-transform">−</button>
                         <span className="font-bold font-mono text-xl text-blue-400">{semitones > 0 ? `+${semitones}` : semitones}</span>
@@ -270,6 +268,7 @@ export default function SetlistPage({ params }: PageProps) {
               songId={songs[currentIndex].id} 
               initialContent={songs[currentIndex].content || ""} 
               youtubeUrl={songs[currentIndex].youtube_url}
+              audioUrl={songs[currentIndex].audio_url} // Передаємо аудіофайл у SongView
               theme={theme} fontSizeLevel={fontSizeLevel} capo={capo} semitones={semitones} 
               layoutMode={layoutMode} 
             />

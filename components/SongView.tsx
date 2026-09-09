@@ -10,6 +10,7 @@ interface SongViewProps {
   songId: number;
   initialContent: string;
   youtubeUrl?: string | null;
+  audioUrl?: string | null; // ДОДАНО: пропс для локального аудіофайлу
   theme: 'dark' | 'light';
   fontSizeLevel: number;
   capo: number;
@@ -26,6 +27,7 @@ export default function SongView({
   songId, 
   initialContent, 
   youtubeUrl = null,
+  audioUrl = null, // ДОДАНО
   theme, 
   fontSizeLevel, 
   capo, 
@@ -37,6 +39,11 @@ export default function SongView({
   const [isScrolled, setIsScrolled] = useState(false);
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
 
+  // Стейти для кастомного аудіоплеєра та гучності
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     const fetchSong = async () => {
       const { data } = await supabase.from("songs").select("*").eq("id", songId).single();
@@ -46,19 +53,35 @@ export default function SongView({
     fetchSong();
   }, [songId]);
 
+  const toggleAudioPlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+  };
+
   // ФИКС ДЕРГАНИЯ: Используем гистерезис (два разных порога)
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled((prev) => {
-        // Сворачиваем шапку только если проскроллили уверенно вниз (> 150)
         if (!prev && window.scrollY > 150) return true;
-        // Разворачиваем только если доскроллили почти в самый верх (< 20)
         if (prev && window.scrollY < 20) return false;
         return prev;
       });
     };
     
-    // passive: true делает отслеживание скролла более плавным для браузера
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -67,7 +90,6 @@ export default function SongView({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       
-      // ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ (ДЛЯ 2 КОЛОНОК)
       if (layoutMode === 'two-column' && window.innerWidth >= 768) {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
@@ -86,7 +108,6 @@ export default function SongView({
         return;
       }
 
-      // ВЕРТИКАЛЬНЫЙ СКРОЛЛ (СТАНДАРТ)
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         if (!sectionsContainerRef.current) return;
@@ -172,6 +193,9 @@ export default function SongView({
     return { type: isHeader ? finalHeader : "СЕКЦІЯ", lines: isHeader ? lines.slice(1) : lines };
   });
 
+  const activeAudioUrl = song?.audio_url || audioUrl;
+  const activeYoutubeUrl = song?.youtube_url || youtubeUrl;
+
   return (
     <div className={`w-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
       
@@ -207,10 +231,50 @@ export default function SongView({
         </div>
       </div>
 
-      {youtubeUrl && (
+      {/* Аудіо або Відео плеєр */}
+      {(activeAudioUrl || activeYoutubeUrl) && (
         <div className="w-full max-w-[1200px] mx-auto px-4 md:px-6 flex-shrink-0">
           <div className={`w-full overflow-hidden rounded-2xl shadow-2xl transition-all duration-500 ${isScrolled ? 'max-h-0 opacity-0 mt-0' : 'max-h-[500px] opacity-100 mt-6'}`}>
-            <YouTubePlayer url={youtubeUrl} isFullWidth={true} />
+            
+            {activeAudioUrl ? (
+              <div className={`flex flex-col md:flex-row items-center gap-4 p-4 rounded-2xl border ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900' : 'bg-white border-gray-200'}`}>
+                <audio 
+                  ref={audioRef} 
+                  src={activeAudioUrl} 
+                  onEnded={() => setIsPlaying(false)} 
+                />
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                  <button 
+                    onClick={toggleAudioPlay}
+                    className="w-12 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-lg transition-all shadow-lg shrink-0"
+                  >
+                    {isPlaying ? "❚❚" : "▶"}
+                  </button>
+                  <div className="flex flex-col flex-1">
+                    <span className={`text-sm font-bold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{song?.title}</span>
+                    <span className="text-xs text-gray-500">{song?.author || "Локальний аудіофайл"}</span>
+                  </div>
+                </div>
+
+                {/* Слайдер гучності */}
+                <div className="flex items-center gap-2 w-full md:w-48 justify-end px-2">
+                  <span className="text-xs text-gray-500">🔊</span>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.01" 
+                    value={volume} 
+                    onChange={handleVolumeChange}
+                    className="w-full accent-blue-500 cursor-pointer h-1 bg-gray-700 rounded-lg"
+                  />
+                  <span className={`text-[10px] font-mono w-8 text-right ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{Math.round(volume * 100)}%</span>
+                </div>
+              </div>
+            ) : activeYoutubeUrl ? (
+              <YouTubePlayer url={activeYoutubeUrl} isFullWidth={true} />
+            ) : null}
+
           </div>
         </div>
       )}
