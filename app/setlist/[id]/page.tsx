@@ -17,7 +17,7 @@ interface Song {
   content?: string;
   bpm?: number;
   youtube_url?: string;
-  audio_url?: string; // ДОДАНО: підтримка локального аудіофайлу
+  audio_url?: string;
   default_key?: string;
   length?: string;
 }
@@ -47,6 +47,13 @@ export default function SetlistPage({ params }: PageProps) {
   const [isTeamShared, setIsTeamShared] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
+
+  // Стейт для обработки свайпов
+  const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number, y: number } | null>(null);
+
+  // Минимальная длина свайпа для срабатывания (в пикселях)
+  const minSwipeDistance = 50;
 
   const fetchSetlistAndSongs = useCallback(async () => {
     try {
@@ -123,6 +130,36 @@ export default function SetlistPage({ params }: PageProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [goToNext, goToPrev]); 
 
+  // ОБРАБОТЧИК СВАЙПОВ
+  const onTouchStart = (e: React.TouchEvent) => {
+    // Игнорируем свайпы, если открыта боковая панель редактирования
+    if (isEditing) return;
+    setTouchEnd(null);
+    setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchEndHandler = () => {
+    if (!touchStart || !touchEnd) return;
+    const distanceX = touchStart.x - touchEnd.x;
+    const distanceY = touchStart.y - touchEnd.y;
+    const isLeftSwipe = distanceX > minSwipeDistance;
+    const isRightSwipe = distanceX < -minSwipeDistance;
+    
+    // Проверяем, что свайп был больше горизонтальным, чем вертикальным (чтобы не переключать при прокрутке страницы вниз)
+    if (Math.abs(distanceX) > Math.abs(distanceY)) {
+      if (isLeftSwipe && currentIndex < songs.length - 1) {
+        goToNext();
+      }
+      if (isRightSwipe && currentIndex > 0) {
+        goToPrev();
+      }
+    }
+  };
+
   useEffect(() => {
     const loadSongSettings = async () => {
       if (!userId || !songs[currentIndex]) return;
@@ -170,7 +207,12 @@ export default function SetlistPage({ params }: PageProps) {
   if (loading) return <div className="flex h-screen items-center justify-center bg-black text-gray-400 font-mono text-[10px] uppercase">Завантаження...</div>;
 
   return (
-    <div className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} ${layoutMode === 'two-column' ? 'md:h-screen md:overflow-hidden md:flex md:flex-col' : 'min-h-screen'}`}>
+    <div 
+      className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} ${layoutMode === 'two-column' ? 'md:h-screen md:overflow-hidden md:flex md:flex-col' : 'min-h-screen'}`}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEndHandler}
+    >
       <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''} ${layoutMode === 'two-column' ? 'md:flex md:flex-col md:flex-grow md:min-h-0' : ''}`}>
         
         <div className={`sticky top-0 w-full flex justify-between items-center p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:flex-shrink-0' : ''}`}>
@@ -268,7 +310,7 @@ export default function SetlistPage({ params }: PageProps) {
               songId={songs[currentIndex].id} 
               initialContent={songs[currentIndex].content || ""} 
               youtubeUrl={songs[currentIndex].youtube_url}
-              audioUrl={songs[currentIndex].audio_url} // Передаємо аудіофайл у SongView
+              audioUrl={songs[currentIndex].audio_url}
               theme={theme} fontSizeLevel={fontSizeLevel} capo={capo} semitones={semitones} 
               layoutMode={layoutMode} 
             />
