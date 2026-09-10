@@ -84,7 +84,7 @@ export default function SongView({
         if (firstSection) {
           const topPos = firstSection.getBoundingClientRect().top + window.scrollY;
           window.scrollTo({ 
-            top: topPos - 280, 
+            top: topPos - 380, 
             behavior: "smooth" 
           });
         }
