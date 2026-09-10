@@ -10,7 +10,7 @@ interface SongViewProps {
   songId: number;
   initialContent: string;
   youtubeUrl?: string | null;
-  audioUrl?: string | null; // ДОДАНО: пропс для локального аудіофайлу
+  audioUrl?: string | null;
   theme: 'dark' | 'light';
   fontSizeLevel: number;
   capo: number;
@@ -27,7 +27,7 @@ export default function SongView({
   songId, 
   initialContent, 
   youtubeUrl = null,
-  audioUrl = null, // ДОДАНО
+  audioUrl = null,
   theme, 
   fontSizeLevel, 
   capo, 
@@ -38,8 +38,8 @@ export default function SongView({
   const [loading, setLoading] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
+  const hasSnappedRef = useRef(false);
 
-  // Стейти для кастомного аудіоплеєра та гучності
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -72,14 +72,31 @@ export default function SongView({
     }
   };
 
-  // ФИКС ДЕРГАНИЯ: Используем гистерезис (два разных порога)
+  // ЖЕСТКИЙ ФИКС: При первом скролле мгновенно и ровно скроллим к Интро (id="section-0")
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled((prev) => {
-        if (!prev && window.scrollY > 150) return true;
-        if (prev && window.scrollY < 20) return false;
-        return prev;
-      });
+      const currentScroll = window.scrollY;
+      
+      if (!hasSnappedRef.current && currentScroll > 10) {
+        hasSnappedRef.current = true;
+        
+        const firstSection = document.getElementById("section-0");
+        if (firstSection) {
+          const topPos = firstSection.getBoundingClientRect().top + window.scrollY;
+          window.scrollTo({ 
+            top: topPos - 280, 
+            behavior: "smooth" 
+          });
+        }
+        // Автоматически сворачиваем шапку
+        setIsScrolled(true);
+      }
+
+      // Сбрасываем флаг, если пользователь прокрутил обратно к самому верху
+      if (currentScroll < 5) {
+        hasSnappedRef.current = false;
+        setIsScrolled(false);
+      }
     };
     
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -115,11 +132,11 @@ export default function SongView({
         const offsets = sectionElements.map(el => el.getBoundingClientRect().top + window.scrollY);
 
         if (e.key === "ArrowDown") {
-          const next = offsets.find(top => top > window.scrollY + 310);
-          if (next !== undefined) window.scrollTo({ top: next - 300, behavior: "smooth" });
+          const next = offsets.find(top => top > window.scrollY + 160);
+          if (next !== undefined) window.scrollTo({ top: next - 140, behavior: "smooth" });
         } else if (e.key === "ArrowUp") {
-          const prev = [...offsets].reverse().find(top => top < window.scrollY + 290);
-          window.scrollTo({ top: prev !== undefined ? prev - 300 : 0, behavior: "smooth" });
+          const prev = [...offsets].reverse().find(top => top < window.scrollY + 120);
+          window.scrollTo({ top: prev !== undefined ? prev - 140 : 0, behavior: "smooth" });
         }
       }
     };
@@ -295,6 +312,7 @@ export default function SongView({
               {sections.map((section, idx) => (
                 <div
                   key={idx}
+                  id={`section-${idx}`}
                   data-section="true"
                   className={`border p-3 md:p-4 rounded-[16px] shadow-lg mb-6 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
                   style={{
@@ -325,6 +343,7 @@ export default function SongView({
           {sections.map((section, idx) => (
             <div 
               key={idx} 
+              id={`section-${idx}`}
               data-section="true"
               className={`border p-3 md:p-4 rounded-[16px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
             >
