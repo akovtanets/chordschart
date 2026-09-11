@@ -5,25 +5,18 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   cacheOnFrontendNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
+  // Можешь вернуть обратно, когда будешь деплоить на прод:
   disable: process.env.NODE_ENV === "development",
+  fallbacks: {
+    // Указываем страницу, на которую воркер перенаправит при обрыве связи
+    document: "/setlists", 
+  },
   workboxOptions: {
-    runtimeCaching: [
-      {
-        // Точное регулярное выражение для страниц сетлистов
-        urlPattern: /\/setlist\/.*/i,
-        handler: "NetworkFirst",
-        options: {
-          cacheName: "dynamic-setlists-cache",
-          expiration: {
-            maxEntries: 50,
-            maxAgeSeconds: 30 * 24 * 60 * 60,
-          },
-          cacheableResponse: {
-            statuses: [0, 200],
-          },
-        },
-      },
-    ],
+    skipWaiting: true,
+    clientsClaim: true,
+    // Принудительно говорим Workbox кэшировать навигацию для страниц
+    navigateFallback: "/setlists",
+    navigateFallbackDenylist: [/^\/_next\//, /^\/api\//],
   },
 });
 
