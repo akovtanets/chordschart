@@ -72,14 +72,29 @@ export default function SongView({
     }
   };
 
-  // ЖЕСТКИЙ ФИКС: При первом скролле мгновенно и ровно скроллим к Интро (id="section-0")
+// ЖЕСТКИЙ ФИКС: Плавный авто-скролл без прыжков и конфликтов
   useEffect(() => {
+    let isSnapping = false;
+
     const handleScroll = () => {
+      if (isSnapping) return;
+
       const currentScroll = window.scrollY;
       
-      if (!hasSnappedRef.current && currentScroll > 10) {
+      if (currentScroll < 15) {
+        if (hasSnappedRef.current || isScrolled) {
+          hasSnappedRef.current = false;
+          setIsScrolled(false);
+        }
+        return;
+      }
+      
+      if (!hasSnappedRef.current && currentScroll >= 10) {
         hasSnappedRef.current = true;
+        isSnapping = true;
         
+        setIsScrolled(true);
+
         const firstSection = document.getElementById("section-0");
         if (firstSection) {
           const topPos = firstSection.getBoundingClientRect().top + window.scrollY;
@@ -88,20 +103,16 @@ export default function SongView({
             behavior: "smooth" 
           });
         }
-        // Автоматически сворачиваем шапку
-        setIsScrolled(true);
-      }
-
-      // Сбрасываем флаг, если пользователь прокрутил обратно к самому верху
-      if (currentScroll < 5) {
-        hasSnappedRef.current = false;
-        setIsScrolled(false);
+        
+        setTimeout(() => {
+          isSnapping = false;
+        }, 500);
       }
     };
     
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, []); // <--- Массив зависимостей теперь стабильный и пустой
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -154,34 +165,60 @@ export default function SongView({
     });
   };
 
-  const renderLineContent = (line: string) => {
-    const parts = line.split(/(\[.*?\])/g);
+const renderLineContent = (line: string) => {
+    // Перевіряємо, чи є в рядку акорди, щоб виділити для них місце
+    const hasChords = line.includes('[');
     const isOnlyChords = line.trim().length > 0 && line.replace(/\[.*?\]/g, '').trim().length === 0;
-    const startsWithChord = line.trim().startsWith('[');
-    const chordSizes = ["text-[12px] md:text-[14px]", "text-[16px] md:text-[18px]", "text-[20px] md:text-[22px]"];
-    const textSizes = ["text-lg md:text-xl", "text-2xl md:text-3xl", "text-3xl md:text-4xl"];
-    const margins = ["mb-6 md:mb-8", "mb-10 md:mb-12", "mb-12 md:mb-14"];
-    const chordOffsets = ["-top-5 md:-top-6", "-top-7 md:-top-8", "-top-9 md:-top-10"];
+    
+    // Розбиваємо рядок на масив сегментів: { chord: "Em", text: "Слово " }
+    const parts = line.split(/(\[.*?\])/g);
+    const segments: { chord: string, text: string }[] = [];
+    let currentChord = "";
+    
+    parts.forEach((part) => {
+      if (part.startsWith('[') && part.endsWith(']')) {
+        const transposed = transposeChord(part.slice(1, -1), semitones, capo);
+        // Якщо підряд ідуть два акорди, склеюємо їх через пробіл
+        currentChord += (currentChord ? " " : "") + transposed;
+      } else if (part !== "") {
+        segments.push({ chord: currentChord, text: part });
+        currentChord = ""; // Скидаємо акорд для наступного тексту
+      }
+    });
+    
+    // Якщо рядок закінчився акордом без тексту
+    if (currentChord) {
+      segments.push({ chord: currentChord, text: "" });
+    }
+
+    const chordSizes = ["text-[11px] md:text-[14px]", "text-[14px] md:text-[18px]", "text-[18px] md:text-[22px]"];
+    const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
+    const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
 
     return (
-      <div className={`flex flex-wrap leading-none ${margins[fontSizeLevel]} ${startsWithChord ? 'mt-6 md:mt-8' : 'mt-2'} ${isOnlyChords ? 'pb-4' : ''} min-h-[1.5rem]`}>
-        {parts.map((part: string, i: number) => {
-          if (part.startsWith('[') && part.endsWith(']')) {
-            const chord = transposeChord(part.slice(1, -1), semitones, capo);
-            return (
-              <div key={i} className={`relative inline-block h-0 overflow-visible ${isOnlyChords ? 'min-w-[4ch] mr-2' : 'w-0'}`}>
-                <span className={`absolute ${chordOffsets[fontSizeLevel]} left-0 font-bold font-mono whitespace-nowrap transition-all ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                  {chord}
-                </span>
-              </div>
-            );
-          }
-          return (
-            <span key={i} className={`font-mono leading-tight whitespace-pre ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-              {part}
-            </span>
-          );
-        })}
+      // Головний контейнер рядка з підтримкою перенесення (flex-wrap)
+      <div className={`flex flex-wrap items-start ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
+        
+        {segments.map((seg, i) => (
+          // Кожен шматочок (акорд + слово) - це окрема колонка
+          <div key={i} className="flex flex-col">
+            
+            {hasChords && (
+              // Рядок акорду (займає фіксовану висоту, навіть якщо порожній, щоб текст не стрибав)
+              <span className={`font-bold font-mono min-h-[1.5em] flex items-end ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                {seg.chord || '\u00A0'}
+              </span>
+            )}
+            
+            {seg.text && (
+              // Рядок тексту (whitespace-pre-wrap зберігає пробіли, але дозволяє перенесення довгих слів)
+              <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                {seg.text}
+              </span>
+            )}
+            
+          </div>
+        ))}
       </div>
     );
   };
