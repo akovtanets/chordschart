@@ -9,14 +9,14 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   workboxOptions: {
     runtimeCaching: [
       {
-        // Кэшируем все страницы сетлистов (/setlist/1, /setlist/2 и т.д.)
-        urlPattern: /^https:\/\/.*\/.*/i, // Или более точное правило под твои страницы
+        // Точное регулярное выражение для страниц сетлистов
+        urlPattern: /\/setlist\/.*/i,
         handler: "NetworkFirst",
         options: {
-          cacheName: "setlists-cache",
+          cacheName: "dynamic-setlists-cache",
           expiration: {
             maxEntries: 50,
-            maxAgeSeconds: 30 * 24 * 60 * 60, // Хранить 30 дней
+            maxAgeSeconds: 30 * 24 * 60 * 60,
           },
           cacheableResponse: {
             statuses: [0, 200],
