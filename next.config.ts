@@ -6,10 +6,13 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
+  // Добавляем fallback для страниц, чтобы при оффлайн-доступе к динамическим роутам отдавался кэш или главная оболочка
+  fallbacks: {
+    document: "/setlists", // Если страница не найдена в кэше оффлайн, перенаправляем на список сетлистов
+  },
 });
 
 const nextConfig: NextConfig = {
-  // Добавляем пустую конфигурацию Turbopack, чтобы подружить его с PWA-плагином
   turbopack: {},
 };
 
