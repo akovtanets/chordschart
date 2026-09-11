@@ -6,9 +6,24 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === "development",
-  // Добавляем fallback для страниц, чтобы при оффлайн-доступе к динамическим роутам отдавался кэш или главная оболочка
-  fallbacks: {
-    document: "/setlists", // Если страница не найдена в кэше оффлайн, перенаправляем на список сетлистов
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        // Кэшируем все страницы сетлистов (/setlist/1, /setlist/2 и т.д.)
+        urlPattern: /^https:\/\/.*\/.*/i, // Или более точное правило под твои страницы
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "setlists-cache",
+          expiration: {
+            maxEntries: 50,
+            maxAgeSeconds: 30 * 24 * 60 * 60, // Хранить 30 дней
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+    ],
   },
 });
 
