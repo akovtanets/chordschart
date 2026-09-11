@@ -9,7 +9,8 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Добавляем пустую конфигурацию Turbopack, чтобы подружить его с PWA-плагином
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);
