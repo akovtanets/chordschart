@@ -23,6 +23,22 @@ interface Song {
 }
 
 export default function SetlistPage({ params }: PageProps) {
+  const [isOffline, setIsOffline] = useState(false);
+
+  // Отслеживание статуса сети
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   const unwrappedParams = use(params);
   const setlistId = unwrappedParams.id;
 
@@ -55,7 +71,7 @@ export default function SetlistPage({ params }: PageProps) {
   // Минимальная длина свайпа для срабатывания (в пикселях)
   const minSwipeDistance = 50;
 
-  const fetchSetlistAndSongs = useCallback(async () => {
+const fetchSetlistAndSongs = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id || null;
@@ -76,15 +92,43 @@ export default function SetlistPage({ params }: PageProps) {
         setSetlistTitle(setlist.title || "Без назви");
         setIsTeamShared(setlist.is_team_shared || false);
         setIsOwner(setlist.user_id === currentUserId);
+        
         if (setlist.song_ids?.length > 0) {
           const { data: songsData } = await supabase.from("songs").select("*").in("id", setlist.song_ids);
           if (songsData) {
             const sorted = setlist.song_ids.map((id: number) => songsData.find((s: Song) => s.id === Number(id))).filter(Boolean);
             setSongs(sorted);
+            
+            // УСПЕШНО ЗАГРУЗИЛИ: Сохраняем сетлист и песни в localStorage для оффлайна
+            localStorage.setItem(`offline_setlist_${setlistId}`, JSON.stringify({
+              title: setlist.title,
+              is_team_shared: setlist.is_team_shared,
+              user_id: setlist.user_id,
+              songs: sorted
+            }));
           }
         }
       }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) { 
+      console.warn("Нет сети, пытаемся загрузить из оффлайн-кэша...", err);
+      
+      // ОШИБКА / НЕТ СЕТИ: Достаем сохраненные данные из памяти телефона
+      const cached = localStorage.getItem(`offline_setlist_${setlistId}`);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setSetlistTitle(parsed.title || "Без назви (Оффлайн)");
+          setIsTeamShared(parsed.is_team_shared || false);
+          setSongs(parsed.songs || []);
+        } catch (parseErr) {
+          console.error("Ошибка чтения кэша:", parseErr);
+        }
+      } else {
+        console.error("Нет интернета и нет сохраненной копии этого сетлиста.");
+      }
+    } finally { 
+      setLoading(false); 
+    }
   }, [setlistId]);
 
   useEffect(() => { fetchSetlistAndSongs(); }, [fetchSetlistAndSongs]);
