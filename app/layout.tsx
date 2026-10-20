@@ -17,6 +17,20 @@ export default function RootLayout({
   return (
     <html lang="uk">
       <body className={inter.className}>
+        {/* Скрипт для принудительного удаления старых Service Worker-ов у всех пользователей */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for (let registration of registrations) {
+                    registration.unregister();
+                  }
+                });
+              }
+            `,
+          }}
+        />
         <Navbar />
         {children}
       </body>
