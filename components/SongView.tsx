@@ -384,7 +384,7 @@ export default function SongView({
         </div>
       )}
 
-      <div className={`relative flex-grow w-full ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-10'}`}>
+      <div className={`relative flex-grow w-full ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-5'}`}>
         
         {layoutMode === 'two-column' && (
           <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden px-4">
@@ -425,7 +425,7 @@ export default function SongView({
         )}
 
         <div 
-          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'px-[10px] md:px-[10px] py-4'}`}
+          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'px-[5px] md:px-[5px] py-4'}`}
           ref={layoutMode === 'single' ? sectionsContainerRef : null}
         >
           {sections.map((section, idx) => (
