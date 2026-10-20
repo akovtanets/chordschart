@@ -64,7 +64,7 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
 
   const transposeChord = (chord: string, delta: number) => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
-      let note = match.replace("A#", "Bb").replace("C#", "Db").replace("D#", "Eb").replace("F#", "Gb").replace("G#", "Ab");
+      let note = match.replace("A#", "Bb").replace("Db", "C#").replace("Ab", "G#").replace("D#", "Eb");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
       return NOTES[(index + delta + 120) % 12]; 

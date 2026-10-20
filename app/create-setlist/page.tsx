@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 // Импорты для DND-Kit
@@ -109,9 +109,15 @@ function SortableSlot({
   );
 }
 
-// --- Главная страница ---
-export default function CreateSetlistPage() {
+// --- Основний контент (обгорнутий для useSearchParams) ---
+function CreateSetlistContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Читаємо дату з URL. Якщо її немає - беремо сьогоднішню.
+  const dateParam = searchParams.get("date");
+  const targetDate = dateParam ? new Date(dateParam) : new Date();
+
   const [title, setTitle] = useState("");
   const [slots, setSlots] = useState<{ id: string; songId: number | null; songTitle: string }[]>([]);
   const [allSongs, setAllSongs] = useState<any[]>([]);
@@ -119,7 +125,7 @@ export default function CreateSetlistPage() {
   const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Чтобы клик не считался началом перетаскивания
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -162,9 +168,23 @@ export default function CreateSetlistPage() {
     const finalIds = slots.map(s => s.songId).filter(id => id !== null);
     if (!title || finalIds.length === 0) return alert("Введіть назву та додайте пісні");
 
-    const { error } = await supabase.from("setlists").insert({ title, song_ids: finalIds });
-    if (!error) router.push("/setlists");
-    else alert("Помилка: " + error.message);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    // Створюємо сетліст з датою з календаря (targetDate)
+    const { error } = await supabase.from("setlists").insert({ 
+      title, 
+      song_ids: finalIds,
+      created_at: targetDate.toISOString(),
+      user_id: userId
+    });
+    
+    if (!error) {
+      // Повертаємось на сторінку сетлістів з тією ж самою датою
+      router.push(`/setlists?date=${targetDate.toISOString()}`);
+    } else {
+      alert("Помилка: " + error.message);
+    }
   };
 
   const filteredSongs = searchQuery 
@@ -175,8 +195,13 @@ export default function CreateSetlistPage() {
     <main className="min-h-screen bg-[#0a0a0a] text-white p-6 sm:p-12 font-sans">
       <div className="max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Новий сет-лист</h1>
-          <Link href="/setlists" className="text-gray-500 hover:text-white transition-colors">Скасувати</Link>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Новий сет-лист</h1>
+            <p className="text-blue-500 text-xs font-bold uppercase tracking-widest mt-2">
+              ДАТА: {targetDate.toLocaleDateString('uk-UA')}
+            </p>
+          </div>
+          <Link href={`/setlists?date=${targetDate.toISOString()}`} className="text-gray-500 hover:text-white transition-colors">Скасувати</Link>
         </div>
         
         <input 
@@ -223,5 +248,13 @@ export default function CreateSetlistPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function CreateSetlistPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-gray-500">Завантаження...</div>}>
+      <CreateSetlistContent />
+    </Suspense>
   );
 }

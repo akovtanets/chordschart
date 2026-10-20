@@ -48,15 +48,14 @@ function SetlistsListContent() {
       .from("team_members")
       .select("team_id, teams(*)")
       .eq("user_id", currentUserId)
-      .in('role', ['admin', 'leader']); // Шукаємо і admin, і leader про всяк випадок
+      .in('role', ['admin', 'leader']);
     
     if (adminMemberships) {
-      // Витягуємо самі об'єкти команд
       const teams = adminMemberships.map(m => Array.isArray(m.teams) ? m.teams[0] : m.teams).filter(Boolean);
       setUserAdminTeams(teams);
     }
 
-    // 2. Отримуємо всі команди користувача для фільтрації сетлістів (щоб бачити чужі шарені сетлісти)
+    // 2. Отримуємо всі команди користувача для фільтрації сетлістів
     const { data: allMemberships } = await supabase
       .from("team_members")
       .select("team_id")
@@ -82,7 +81,6 @@ function SetlistsListContent() {
     fetchLists();
   }, []);
 
-  // Оновлена функція поширення (тепер приймає конкретний ID команди або null для приватного)
   const handleShareChange = async (e: React.MouseEvent, listId: string, teamId: string | null) => {
     e.preventDefault();
     e.stopPropagation();
@@ -102,7 +100,7 @@ function SetlistsListContent() {
         l.id === listId ? { ...l, is_team_shared: isShared, team_id: teamId } : l
       ));
     }
-    setOpenShareMenuId(null); // Закриваємо меню після вибору
+    setOpenShareMenuId(null);
   };
 
   const filteredLists = useMemo(() => {
@@ -177,7 +175,12 @@ function SetlistsListContent() {
                 {selectedDate.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
-            <Link href="/create-setlist" className="bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all">+ Створити</Link>
+            <Link 
+              href={`/create-setlist?date=${selectedDate.toISOString()}`} 
+              className="bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all"
+            >
+              + Створити
+            </Link>
           </div>
 
           <div className="grid gap-4">
@@ -185,7 +188,6 @@ function SetlistsListContent() {
               filteredLists.map((list: any) => {
                 const isMyList = list.user_id === userId;
                 const isShared = list.is_team_shared;
-                // Знаходимо назву команди, з якою пошарено
                 const sharedTeam = userAdminTeams.find(t => t.id === list.team_id);
 
                 return (
@@ -238,7 +240,6 @@ function SetlistsListContent() {
                                     <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500">Доступ</span>
                                   </div>
                                   
-                                  {/* Опція "Приватний" */}
                                   <button
                                     onClick={(e) => handleShareChange(e, list.id, null)}
                                     className={`w-full text-left px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-between ${!isShared ? 'text-blue-500 bg-blue-600/10' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'}`}
@@ -247,7 +248,6 @@ function SetlistsListContent() {
                                     {!isShared && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
                                   </button>
 
-                                  {/* Список команд */}
                                   {userAdminTeams.map(t => (
                                     <button
                                       key={t.id}
