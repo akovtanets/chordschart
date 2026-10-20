@@ -76,9 +76,9 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
     
     const translationMap: Record<string, string> = {
       "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", 
-    "BRIDGE": "БРІДЖ", "OUTRO": "АУТРО", "ENDING": "КІНЕЦЬ", "SOLO": "СОЛО", 
-    "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
-    "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
+      "BRIDGE": "БРІДЖ", "OUTRO": "АУТРО", "ENDING": "КІНЕЦЬ", "SOLO": "СОЛО", 
+      "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
+      "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
     };
 
     return content.split(/\r?\n\s*\r?\n/).map((s: string) => {
@@ -105,24 +105,74 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
   };
 
   const RenderLine = ({ line }: { line: string }) => {
+    const hasChords = line.includes('[');
+    const isOnlyChords = line.trim().length > 0 && line.replace(/\[.*?\]/g, '').trim().length === 0;
+
+    if (!hasChords) {
+      return (
+        <div className="flex flex-col mb-4">
+          <span className="font-mono whitespace-pre-wrap leading-tight text-lg text-gray-200">
+            {line}
+          </span>
+        </div>
+      );
+    }
+
     const parts = line.split(/(\[.*?\])/g);
-    const startsWithChord = line.trim().startsWith('[');
+    let pairs: { chord: string; text: string }[] = [];
+    let currentChord = "";
+    let currentText = "";
+
+    parts.forEach((part) => {
+      if (part.startsWith('[') && part.endsWith(']')) {
+        if (currentChord || currentText) {
+          pairs.push({ chord: currentChord, text: currentText });
+          currentChord = "";
+          currentText = "";
+        }
+        currentChord = transposeChord(part.slice(1, -1), offset);
+      } else {
+        currentText += part;
+      }
+    });
+    pairs.push({ chord: currentChord, text: currentText });
+
+    // Перевірка на інструментальний рядок (тільки акорди, пробіли та символи '|')
+    const isInstrumentalLine = pairs.every(p => !p.text.replace(/[|\s]/g, ''));
+
+    if (isInstrumentalLine) {
+      return (
+        <div className="flex flex-wrap items-center gap-x-3 mb-4">
+          {pairs.map((pair, index) => (
+            <div key={index} className="flex items-center gap-x-3">
+              {pair.chord && (
+                <span className="font-medium font-mono text-blue-400 text-sm">
+                  {pair.chord}
+                </span>
+              )}
+              {pair.text.includes('|') && (
+                <span className="font-mono font-bold text-gray-500 text-sm">
+                  |
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
 
     return (
-      <div className={`flex flex-wrap leading-none mb-6 ${startsWithChord ? 'mt-6' : 'mt-2'} min-h-[1.5rem]`}>
-        {parts.map((part, i) => {
-          if (part.startsWith('[') && part.endsWith(']')) {
-            const chord = transposeChord(part.slice(1, -1), offset);
-            const nextPart = parts[i + 1];
-            const hasFollowingText = nextPart && nextPart.trim().length > 0;
-            return (
-              <div key={i} className={`relative inline-block h-0 overflow-visible ${!hasFollowingText ? 'min-w-[3.5ch] mr-2' : 'w-0'}`}>
-                <span className="absolute -top-5 left-0 font-bold font-mono tracking-tighter whitespace-nowrap text-blue-400 text-sm">{chord}</span>
-              </div>
-            );
-          }
-          return <span key={i} className="font-mono leading-tight whitespace-pre text-gray-200 text-lg">{part}</span>;
-        })}
+      <div className={`flex flex-wrap items-start mb-4 ${isOnlyChords ? 'pb-1' : ''}`}>
+        {pairs.map((pair, index) => (
+          <div key={index} className="flex flex-col inline-flex mr-[2px]">
+            <span className="font-medium font-mono whitespace-pre leading-none text-blue-400 text-sm">
+              {pair.chord || "\u00A0"}
+            </span>
+            <span className="font-mono whitespace-pre leading-tight text-lg text-gray-200">
+              {pair.text || "\u00A0"}
+            </span>
+          </div>
+        ))}
       </div>
     );
   };

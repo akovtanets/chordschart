@@ -252,6 +252,30 @@ const renderLineContent = (line: string) => {
     });
     pairs.push({ chord: currentChord, text: currentText });
 
+    // Проверяем, является ли строка чисто инструментальной (нет обычного текста, кроме пробелов и символов '|')
+    const isInstrumentalLine = pairs.every(p => !p.text.replace(/[|\s]/g, ''));
+
+    if (isInstrumentalLine) {
+      return (
+        <div className={`flex flex-wrap items-center gap-x-3 ${margins[fontSizeLevel]}`}>
+          {pairs.map((pair, index) => (
+            <div key={index} className="flex items-center gap-x-3">
+              {pair.chord && (
+                <span className={`font-medium font-mono ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+                  {pair.chord}
+                </span>
+              )}
+              {pair.text.includes('|') && (
+                <span className={`font-mono font-bold ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                  |
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className={`flex flex-wrap items-start ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
         {pairs.map((pair, index) => (
