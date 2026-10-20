@@ -215,13 +215,15 @@ export default function SongView({
     });
   };
 
-  const renderLineContent = (line: string) => {
+const renderLineContent = (line: string) => {
     const hasChords = line.includes('[');
     const isOnlyChords = line.trim().length > 0 && line.replace(/\[.*?\]/g, '').trim().length === 0;
 
+    const chordSizes = ["text-[11px] md:text-[14px]", "text-[14px] md:text-[18px]", "text-[18px] md:text-[22px]"];
+    const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
+    const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
+
     if (!hasChords) {
-      const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
-      const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
       return (
         <div className={`flex flex-col ${margins[fontSizeLevel]}`}>
           <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
@@ -232,44 +234,36 @@ export default function SongView({
     }
 
     const parts = line.split(/(\[.*?\])/g);
-    let chordRow: React.ReactNode[] = [];
-    let textRow: React.ReactNode[] = [];
+    let pairs: { chord: string; text: string }[] = [];
+    let currentChord = "";
+    let currentText = "";
 
-    parts.forEach((part, index) => {
+    parts.forEach((part) => {
       if (part.startsWith('[') && part.endsWith(']')) {
-        const transposed = transposeChord(part.slice(1, -1), semitones, capo);
-        chordRow.push(
-          <span key={`chord-${index}`} className={`font-medium font-mono ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-            {transposed}
-          </span>
-        );
-        textRow.push(<span key={`empty-text-${index}`} className="inline-block w-2"></span>);
-      } else if (part !== "") {
-        chordRow.push(
-          <span key={`empty-chord-${index}`} className="invisible font-mono whitespace-pre">
-            {part}
-          </span>
-        );
-        textRow.push(
-          <span key={`text-${index}`} className={`font-mono whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
-            {part}
-          </span>
-        );
+        if (currentChord || currentText) {
+          pairs.push({ chord: currentChord, text: currentText });
+          currentChord = "";
+          currentText = "";
+        }
+        currentChord = transposeChord(part.slice(1, -1), semitones, capo);
+      } else {
+        currentText += part;
       }
     });
-
-    const chordSizes = ["text-[11px] md:text-[14px]", "text-[14px] md:text-[18px]", "text-[18px] md:text-[22px]"];
-    const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
-    const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
+    pairs.push({ chord: currentChord, text: currentText });
 
     return (
-      <div className={`flex flex-col relative ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
-        <div className={`absolute top-0 left-0 w-full whitespace-nowrap overflow-visible pointer-events-none ${chordSizes[fontSizeLevel]}`}>
-           {chordRow}
-        </div>
-        <div className={`pt-[1.5em] leading-tight ${textSizes[fontSizeLevel]}`}>
-           {textRow}
-        </div>
+      <div className={`flex flex-wrap items-start ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
+        {pairs.map((pair, index) => (
+          <div key={index} className="flex flex-col inline-flex mr-[2px]">
+            <span className={`font-medium font-mono whitespace-pre leading-none ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+              {pair.chord || "\u00A0"}
+            </span>
+            <span className={`font-mono whitespace-pre leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+              {pair.text || "\u00A0"}
+            </span>
+          </div>
+        ))}
       </div>
     );
   };
