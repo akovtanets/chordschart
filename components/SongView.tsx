@@ -279,7 +279,7 @@ export default function SongView({
   const rawContent: string = song?.content || initialContent || "";
   const translationMap: Record<string, string> = {
     "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", 
-    "BRIDGE": "БРІДЖ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", 
+    "BRIDGE": "БРІДЖ", "OUTRO": "АУТРО", "ENDING": "КІНЕЦЬ", "SOLO": "СОЛО", 
     "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
     "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
   };
@@ -425,7 +425,7 @@ export default function SongView({
         )}
 
         <div 
-          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'p-4 md:p-10'}`}
+          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'px-[10px] md:px-[10px] py-4'}`}
           ref={layoutMode === 'single' ? sectionsContainerRef : null}
         >
           {sections.map((section, idx) => (

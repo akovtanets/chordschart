@@ -75,8 +75,10 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
     if (!content) return [];
     
     const translationMap: Record<string, string> = {
-      "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", "BRIDGE": "БРІДЖ",
-      "INTERLUDE": "ВСТАВКА", "INSTRUMENTAL": "ПРОГРАШ", "OUTRO": "КІНЕЦЬ", "SOLO": "СОЛО", "TAG": "ТЕГ"
+      "INTRO": "ВСТУП", "VERSE": "КУПЛЕТ", "CHORUS": "ПРИСПІВ", 
+    "BRIDGE": "БРІДЖ", "OUTRO": "АУТРО", "ENDING": "КІНЕЦЬ", "SOLO": "СОЛО", 
+    "INSTRUMENTAL": "ПРОГРАШ", "INTERLUDE": "ВСТАВКА", 
+    "TAG": "ТЕГ", "PRE-CHORUS": "ПЕРЕД-ПРИСПІВ"
     };
 
     return content.split(/\r?\n\s*\r?\n/).map((s: string) => {
