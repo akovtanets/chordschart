@@ -387,10 +387,10 @@ export default function SongView({
       <div className={`relative flex-grow w-full ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-10'}`}>
         
         {layoutMode === 'two-column' && (
-          <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden">
+          <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden px-4">
             <div
               id="two-column-scroll-container"
-              className="h-full w-full max-w-[1200px] mx-auto overflow-x-auto overflow-y-hidden custom-scrollbar px-2"
+              className="h-full w-full max-w-[1200px] mx-auto overflow-x-auto overflow-y-hidden custom-scrollbar"
               style={{
                 columnCount: 2,
                 columnGap: '24px',
@@ -425,7 +425,7 @@ export default function SongView({
         )}
 
         <div 
-          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : ''}`}
+          className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'p-4 md:p-10'}`}
           ref={layoutMode === 'single' ? sectionsContainerRef : null}
         >
           {sections.map((section, idx) => (
