@@ -72,7 +72,7 @@ export default function SongView({
     }
   };
 
-// ЖЕСТКИЙ ФИКС: Плавный авто-скролл без прыжков и конфликтов
+  // Плавный авто-скролл
   useEffect(() => {
     let isSnapping = false;
 
@@ -112,47 +112,97 @@ export default function SongView({
     
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []); // <--- Массив зависимостей теперь стабильный и пустой
+  }, []); 
 
+  // Навігація клавіатурою та свайпами по блоках
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      
-      if (layoutMode === 'two-column' && window.innerWidth >= 768) {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          const scrollContainer = document.getElementById("two-column-scroll-container");
-          if (!scrollContainer) return;
-          
-          const step = (scrollContainer.clientWidth + 24) / 2;
-          const currentStep = Math.round(scrollContainer.scrollLeft / step);
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let isCooldown = false;
 
-          if (e.key === "ArrowDown") {
-            scrollContainer.scrollTo({ left: (currentStep + 1) * step, behavior: "smooth" });
-          } else if (e.key === "ArrowUp") {
-            scrollContainer.scrollTo({ left: (currentStep - 1) * step, behavior: "smooth" });
-          }
+    const navigateSection = (direction: 'next' | 'prev') => {
+      if (isCooldown) return;
+      isCooldown = true;
+      setTimeout(() => { isCooldown = false; }, 350);
+
+      if (layoutMode === 'two-column' && window.innerWidth >= 768) {
+        const scrollContainer = document.getElementById("two-column-scroll-container");
+        if (!scrollContainer) return;
+        
+        const step = (scrollContainer.clientWidth + 24) / 2;
+        const currentStep = Math.round(scrollContainer.scrollLeft / step);
+
+        if (direction === 'next') {
+          scrollContainer.scrollTo({ left: (currentStep + 1) * step, behavior: "smooth" });
+        } else {
+          scrollContainer.scrollTo({ left: (currentStep - 1) * step, behavior: "smooth" });
         }
         return;
       }
 
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        if (!sectionsContainerRef.current) return;
-        const sectionElements = Array.from(sectionsContainerRef.current.querySelectorAll('[data-section="true"]'));
-        const offsets = sectionElements.map(el => el.getBoundingClientRect().top + window.scrollY);
+      if (!sectionsContainerRef.current) return;
+      const sectionElements = Array.from(sectionsContainerRef.current.querySelectorAll('[data-section="true"]'));
+      const offsets = sectionElements.map(el => el.getBoundingClientRect().top + window.scrollY);
 
-        if (e.key === "ArrowDown") {
-          const next = offsets.find(top => top > window.scrollY + 160);
-          if (next !== undefined) window.scrollTo({ top: next - 140, behavior: "smooth" });
-        } else if (e.key === "ArrowUp") {
-          const prev = [...offsets].reverse().find(top => top < window.scrollY + 120);
-          window.scrollTo({ top: prev !== undefined ? prev - 140 : 0, behavior: "smooth" });
+      if (direction === 'next') {
+        const next = offsets.find(top => top > window.scrollY + 160);
+        if (next !== undefined) window.scrollTo({ top: next - 140, behavior: "smooth" });
+      } else {
+        const prev = [...offsets].reverse().find(top => top < window.scrollY + 120);
+        window.scrollTo({ top: prev !== undefined ? prev - 140 : 0, behavior: "smooth" });
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        navigateSection('next');
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        navigateSection('prev');
+      }
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      const touchEndY = e.changedTouches[0].clientY;
+      const touchEndX = e.changedTouches[0].clientX;
+
+      const diffY = touchStartY - touchEndY;
+      const diffX = touchStartX - touchEndX;
+      const minSwipeDistance = 35;
+
+      if (layoutMode === 'two-column' && window.innerWidth >= 768) {
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > minSwipeDistance) {
+          if (diffX > 0) navigateSection('next');
+          else navigateSection('prev');
+        }
+      } else {
+        if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > minSwipeDistance) {
+          if (diffY > 0) navigateSection('next');
+          else navigateSection('prev');
         }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
   }, [song, loading, layoutMode]);
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
@@ -165,60 +215,61 @@ export default function SongView({
     });
   };
 
-const renderLineContent = (line: string) => {
-    // Перевіряємо, чи є в рядку акорди, щоб виділити для них місце
+  const renderLineContent = (line: string) => {
     const hasChords = line.includes('[');
     const isOnlyChords = line.trim().length > 0 && line.replace(/\[.*?\]/g, '').trim().length === 0;
-    
-    // Розбиваємо рядок на масив сегментів: { chord: "Em", text: "Слово " }
+
+    if (!hasChords) {
+      const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
+      const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
+      return (
+        <div className={`flex flex-col ${margins[fontSizeLevel]}`}>
+          <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+            {line}
+          </span>
+        </div>
+      );
+    }
+
     const parts = line.split(/(\[.*?\])/g);
-    const segments: { chord: string, text: string }[] = [];
-    let currentChord = "";
-    
-    parts.forEach((part) => {
+    let chordRow: React.ReactNode[] = [];
+    let textRow: React.ReactNode[] = [];
+
+    parts.forEach((part, index) => {
       if (part.startsWith('[') && part.endsWith(']')) {
         const transposed = transposeChord(part.slice(1, -1), semitones, capo);
-        // Якщо підряд ідуть два акорди, склеюємо їх через пробіл
-        currentChord += (currentChord ? " " : "") + transposed;
+        chordRow.push(
+          <span key={`chord-${index}`} className={`font-medium font-mono ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
+            {transposed}
+          </span>
+        );
+        textRow.push(<span key={`empty-text-${index}`} className="inline-block w-2"></span>);
       } else if (part !== "") {
-        segments.push({ chord: currentChord, text: part });
-        currentChord = ""; // Скидаємо акорд для наступного тексту
+        chordRow.push(
+          <span key={`empty-chord-${index}`} className="invisible font-mono whitespace-pre">
+            {part}
+          </span>
+        );
+        textRow.push(
+          <span key={`text-${index}`} className={`font-mono whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+            {part}
+          </span>
+        );
       }
     });
-    
-    // Якщо рядок закінчився акордом без тексту
-    if (currentChord) {
-      segments.push({ chord: currentChord, text: "" });
-    }
 
     const chordSizes = ["text-[11px] md:text-[14px]", "text-[14px] md:text-[18px]", "text-[18px] md:text-[22px]"];
     const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
     const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
 
     return (
-      // Головний контейнер рядка з підтримкою перенесення (flex-wrap)
-      <div className={`flex flex-wrap items-start ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
-        
-        {segments.map((seg, i) => (
-          // Кожен шматочок (акорд + слово) - це окрема колонка
-          <div key={i} className="flex flex-col">
-            
-            {hasChords && (
-              // Рядок акорду (займає фіксовану висоту, навіть якщо порожній, щоб текст не стрибав)
-              <span className={`font-bold font-mono min-h-[1.5em] flex items-end ${chordSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>
-                {seg.chord || '\u00A0'}
-              </span>
-            )}
-            
-            {seg.text && (
-              // Рядок тексту (whitespace-pre-wrap зберігає пробіли, але дозволяє перенесення довгих слів)
-              <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
-                {seg.text}
-              </span>
-            )}
-            
-          </div>
-        ))}
+      <div className={`flex flex-col relative ${margins[fontSizeLevel]} ${isOnlyChords ? 'pb-1 md:pb-2' : ''}`}>
+        <div className={`absolute top-0 left-0 w-full whitespace-nowrap overflow-visible pointer-events-none ${chordSizes[fontSizeLevel]}`}>
+           {chordRow}
+        </div>
+        <div className={`pt-[1.5em] leading-tight ${textSizes[fontSizeLevel]}`}>
+           {textRow}
+        </div>
       </div>
     );
   };
@@ -351,7 +402,7 @@ const renderLineContent = (line: string) => {
                   key={idx}
                   id={`section-${idx}`}
                   data-section="true"
-                  className={`border p-3 md:p-4 rounded-[16px] shadow-lg mb-6 ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+                  className={`border p-4 md:p-6 rounded-xl mb-6 ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
                   style={{
                     breakInside: 'avoid',
                     pageBreakInside: 'avoid',
@@ -360,9 +411,9 @@ const renderLineContent = (line: string) => {
                     verticalAlign: 'top'
                   }}
                 >
-                  <div className="flex items-center gap-4 mb-8">
-                    <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
-                    <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-gray-100'}`}></div>
+                  <div className="flex items-center gap-3 mb-6">
+                    <h3 className={`text-sm md:text-base font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{section.type}</h3>
+                    <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'}`}></div>
                   </div>
                   <div className="flex flex-col">
                     {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}
@@ -382,11 +433,11 @@ const renderLineContent = (line: string) => {
               key={idx} 
               id={`section-${idx}`}
               data-section="true"
-              className={`border p-3 md:p-4 rounded-[16px] shadow-lg ${theme === 'dark' ? 'bg-[#0a0c10] border-gray-900 shadow-black/40' : 'bg-white border-gray-200 shadow-gray-200/50'}`}
+              className={`border p-4 md:p-6 rounded-xl ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
             >
-              <div className="flex items-center gap-4 mb-8">
-                <h3 className="text-blue-500 text-[13px] md:text-[15px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
-                <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-gray-100'}`}></div>
+              <div className="flex items-center gap-3 mb-6">
+                <h3 className={`text-sm md:text-base font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{section.type}</h3>
+                <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'}`}></div>
               </div>
               <div className="flex flex-col">
                 {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}
