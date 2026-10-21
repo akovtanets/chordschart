@@ -322,7 +322,7 @@ const renderLineContent = (line: string) => {
   return (
     <div className={`w-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
       
-      <div className={`w-full sticky top-[73px] z-[90] transition-all duration-500 flex-shrink-0 ${theme === 'dark' ? 'bg-[#050505]/95 backdrop-blur-sm border-b border-gray-900' : 'bg-gray-100/95 backdrop-blur-sm border-b border-gray-200'} ${layoutMode === 'two-column' ? 'md:relative md:top-0' : ''}`}>
+      <div id="sticky-header" className={`w-full sticky top-[73px] z-[90] transition-all duration-500 flex-shrink-0 ${theme === 'dark' ? 'bg-[#050505]/95 backdrop-blur-sm border-b border-gray-900' : 'bg-gray-100/95 backdrop-blur-sm border-b border-gray-200'} ${layoutMode === 'two-column' ? 'md:relative md:top-0' : ''}`}>
         <div className={`w-full max-w-[1200px] mx-auto px-4 md:px-6 transition-all duration-500 ${isScrolled ? 'py-3' : 'py-5'}`}>
           
           <div className="flex flex-col justify-center">
@@ -361,8 +361,12 @@ const renderLineContent = (line: string) => {
                     if (layoutMode === 'two-column' && window.innerWidth >= 768) {
                       el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
                     } else {
-                      // Сдвиг увеличен, так как теперь кнопки тоже занимают место в закрепленной шапке
-                      const y = el.getBoundingClientRect().top + window.scrollY - 170;
+                      // Динамически получаем нижнюю границу шапки
+                      const header = document.getElementById('sticky-header');
+                      const headerBottom = header ? header.getBoundingClientRect().bottom : 170;
+                      
+                      // Скроллим так, чтобы блок был прямо под шапкой + 20px для красоты
+                      const y = el.getBoundingClientRect().top + window.scrollY - headerBottom - 20;
                       window.scrollTo({ top: y, behavior: 'smooth' });
                     }
                   }

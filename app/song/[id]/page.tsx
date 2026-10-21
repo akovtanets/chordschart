@@ -274,31 +274,12 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
 
-         {/* Швидка навігація по блоках */}
-        <div className="flex flex-wrap justify-center gap-2 md:gap-3 mb-6 mt-4">
-          {sections.map((section, idx) => (
-            <button
-              key={`nav-${idx}`}
-              onClick={() => {
-                const el = document.getElementById(`section-${idx}`);
-                if (el) {
-                  // Высчитываем позицию с учетом отступа сверху (чтобы шапка не перекрывала блок)
-                  const y = el.getBoundingClientRect().top + window.scrollY - 100;
-                  window.scrollTo({ top: y, behavior: 'smooth' });
-                }
-              }}
-              className="bg-[#0a0c10] border border-gray-900 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-blue-500 hover:border-gray-700 transition-colors"
-            >
-              {section.type}
-            </button>
-          ))}
-        </div> 
+          
         {/* Текст песни */}
         <div className="flex flex-col gap-8 pb-40 mt-4">
           {sections.map((section, idx) => (
             <div 
               key={idx} 
-              id={`section-${idx}`} // <-- Обязательно добавляем ID для скролла
               className="relative bg-[#0a0c10] border border-gray-900 p-8 md:p-10 pt-8 rounded-[32px] shadow-2xl w-full"
             >
               <div className="absolute -top-[12px] left-8 md:left-10 px-3 bg-[#050505]">
