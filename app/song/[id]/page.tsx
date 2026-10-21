@@ -21,7 +21,7 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
   const [volume, setVolume] = useState(1); // від 0 до 1
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
+  const NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,7 +64,7 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
 
   const transposeChord = (chord: string, delta: number) => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
-      let note = match.replace("A#", "Bb").replace("Db", "C#").replace("Ab", "G#").replace("D#", "Eb");
+      let note = match.replace("A#", "Bb").replace("Db", "C#").replace("D#", "Eb");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
       return NOTES[(index + delta + 120) % 12]; 

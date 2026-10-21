@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import YouTubePlayer from "@/components/YouTubePlayer";
 
-const NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
+const NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
 interface SongViewProps {
   songId: number;
@@ -207,7 +207,7 @@ export default function SongView({
 
   const transposeChord = (chord: string, delta: number, capoOffset: number): string => {
     return chord.replace(/([A-G][b#]?)/g, (match) => {
-      let note = match.replace("A#", "Bb").replace("Db", "C#").replace("Ab", "G#").replace("D#", "Eb");
+      let note = match.replace("A#", "Bb").replace("Db", "C#").replace("D#", "Eb");
       const index = NOTES.indexOf(note);
       if (index === -1) return match;
       const finalDelta = delta - capoOffset;
