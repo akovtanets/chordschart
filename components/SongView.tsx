@@ -350,7 +350,33 @@ const renderLineContent = (line: string) => {
               ))}
             </div>
           </div>
-          
+          {/* НОВАЯ НАВИГАЦИЯ (Внутри Sticky Шапки) */}
+          <div className={`w-full flex flex-wrap justify-start gap-2 md:gap-3 transition-all duration-500 ${isScrolled ? 'mt-3' : 'mt-5'}`}>
+            {sections.map((section, idx) => (
+              <button
+                key={`nav-${idx}`}
+                onClick={() => {
+                  const el = document.getElementById(`section-${idx}`);
+                  if (el) {
+                    if (layoutMode === 'two-column' && window.innerWidth >= 768) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+                    } else {
+                      // Сдвиг увеличен, так как теперь кнопки тоже занимают место в закрепленной шапке
+                      const y = el.getBoundingClientRect().top + window.scrollY - 170;
+                      window.scrollTo({ top: y, behavior: 'smooth' });
+                    }
+                  }
+                }}
+                className={`border rounded-xl px-3 py-1.5 text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                  theme === 'dark' 
+                    ? 'bg-[#0a0c10] border-gray-800 text-gray-500 hover:text-blue-400 hover:border-gray-700' 
+                    : 'bg-white border-gray-300 text-gray-500 hover:text-blue-600 hover:border-gray-400'
+                }`}
+              >
+                {section.type}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -403,33 +429,7 @@ const renderLineContent = (line: string) => {
       )}
 
       <div className={`relative flex-grow w-full ${layoutMode === 'two-column' ? 'md:min-h-0' : 'p-4 md:p-5'}`}>
-        {/* Швидка навігація по блоках (SongView) */}
-        <div className={`w-full max-w-[1200px] mx-auto flex flex-wrap justify-center gap-2 md:gap-3 mb-6 px-1 ${layoutMode === 'two-column' ? 'px-4 mt-4 md:hidden' : ''}`}>
-          {sections.map((section, idx) => (
-            <button
-              key={`nav-${idx}`}
-              onClick={() => {
-                const el = document.getElementById(`section-${idx}`);
-                if (el) {
-                  // Для двухколоночного режима с горизонтальным скроллом используем scrollIntoView
-                  if (layoutMode === 'two-column' && window.innerWidth >= 768) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
-                  } else {
-                    const y = el.getBoundingClientRect().top + window.scrollY - 140;
-                    window.scrollTo({ top: y, behavior: 'smooth' });
-                  }
-                }
-              }}
-              className={`border rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                theme === 'dark' 
-                  ? 'bg-[#0a0c10] border-gray-800 text-gray-500 hover:text-blue-400 hover:border-gray-700' 
-                  : 'bg-white border-gray-300 text-gray-500 hover:text-blue-600 hover:border-gray-400'
-              }`}
-            >
-              {section.type}
-            </button>
-          ))}
-        </div>
+        
         {layoutMode === 'two-column' && (
           <div className="hidden md:block absolute inset-0 pt-4 pb-8 overflow-hidden px-4">
             <div
