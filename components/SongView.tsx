@@ -420,7 +420,7 @@ const renderLineContent = (line: string) => {
                   key={idx}
                   id={`section-${idx}`}
                   data-section="true"
-                  className={`border p-4 md:p-6 rounded-xl mb-6 ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
+                  className={`relative border p-4 md:p-6 pt-5 rounded-xl mb-6 mt-3 ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
                   style={{
                     breakInside: 'avoid',
                     pageBreakInside: 'avoid',
@@ -429,9 +429,10 @@ const renderLineContent = (line: string) => {
                     verticalAlign: 'top'
                   }}
                 >
-                  <div className="flex items-center gap-3 mb-6">
-                    <h3 className={`text-sm md:text-base font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{section.type}</h3>
-                    <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'}`}></div>
+                  <div className={`absolute -top-[10px] left-4 md:left-6 px-2 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
+                    <h3 className={`text-xs md:text-sm font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {section.type}
+                    </h3>
                   </div>
                   <div className="flex flex-col">
                     {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}
@@ -451,11 +452,12 @@ const renderLineContent = (line: string) => {
               key={idx} 
               id={`section-${idx}`}
               data-section="true"
-              className={`border p-4 md:p-6 rounded-xl ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
+              className={`relative border p-4 md:p-6 pt-5 rounded-xl mt-3 ${theme === 'dark' ? 'border-gray-800 bg-transparent' : 'border-gray-300 bg-transparent'}`}
             >
-              <div className="flex items-center gap-3 mb-6">
-                <h3 className={`text-sm md:text-base font-semibold uppercase tracking-wider ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{section.type}</h3>
-                <div className={`h-[1px] flex-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'}`}></div>
+              <div className={`absolute -top-[10px] left-4 md:left-6 px-2 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'}`}>
+                <h3 className={`text-xs md:text-sm font-bold uppercase tracking-widest ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {section.type}
+                </h3>
               </div>
               <div className="flex flex-col">
                 {section.lines.map((line, lIdx) => <div key={lIdx}>{renderLineContent(line)}</div>)}

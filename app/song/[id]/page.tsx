@@ -275,12 +275,16 @@ export default function SongPage({ params }: { params: Promise<{ id: string }> }
         </div>
 
         {/* Текст песни */}
-        <div className="flex flex-col gap-6 pb-40">
+        <div className="flex flex-col gap-8 pb-40 mt-4">
           {sections.map((section, idx) => (
-            <div key={idx} className="bg-[#0a0c10] border border-gray-900 p-8 md:p-10 rounded-[32px] shadow-2xl w-full">
-              <div className="flex items-center gap-4 mb-8">
-                <h3 className="text-blue-500 text-[11px] font-black uppercase tracking-[0.4em] italic">{section.type}</h3>
-                <div className="h-[1px] flex-1 bg-blue-900/10"></div>
+            <div 
+              key={idx} 
+              className="relative bg-[#0a0c10] border border-gray-900 p-8 md:p-10 pt-8 rounded-[32px] shadow-2xl w-full"
+            >
+              <div className="absolute -top-[12px] left-8 md:left-10 px-3 bg-[#050505]">
+                <h3 className="text-blue-500 text-[11px] font-black uppercase tracking-[0.4em] italic">
+                  {section.type}
+                </h3>
               </div>
               <div className="flex flex-col">
                 {section.lines.map((line, lIdx) => <RenderLine key={lIdx} line={line} />)}
