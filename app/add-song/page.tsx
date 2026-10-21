@@ -11,10 +11,14 @@ export default function AddSongPage() {
   const [author, setAuthor] = useState("");
   const [content, setContent] = useState("");
   
-  // Додано підтримку вибору джерела аудіо/відео
+  // Джерело аудіо/відео
   const [sourceType, setSourceType] = useState<"youtube" | "mp3">("youtube");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
+
+  // Обкладинка
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   const [songKey, setSongKey] = useState("");
   const [bpm, setBpm] = useState("");
@@ -69,6 +73,14 @@ export default function AddSongPage() {
     }
   };
 
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverFile(file);
+      setCoverPreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!captchaToken) {
@@ -79,7 +91,7 @@ export default function AddSongPage() {
     setLoading(true);
 
     try {
-      // Перевірка капчі через наш новий API-роут
+      // Перевірка капчі
       const verifyRes = await fetch('/api/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,15 +108,38 @@ export default function AddSongPage() {
       }
 
       let finalAudioUrl = null;
+      let finalCoverUrl = null;
 
-      // Якщо обрано MP3, завантажуємо його в Supabase Storage
+      // Завантаження Обкладинки (якщо обрана)
+      if (coverFile) {
+        const fileExt = coverFile.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { error: coverUploadError } = await supabase.storage
+          .from("covers")
+          .upload(fileName, coverFile);
+
+        if (coverUploadError) {
+          alert(`Помилка завантаження обкладинки: ${coverUploadError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const { data: coverUrlData } = supabase.storage
+          .from("covers")
+          .getPublicUrl(fileName);
+
+        finalCoverUrl = coverUrlData.publicUrl;
+      }
+
+      // Завантаження MP3 (якщо обрано)
       if (sourceType === "mp3" && audioFile) {
         const fileExt = audioFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `audio/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-          .from("songs-audio") // Назва вашого бакета в Supabase Storage
+          .from("songs-audio")
           .upload(filePath, audioFile);
 
         if (uploadError) {
@@ -120,12 +155,14 @@ export default function AddSongPage() {
         finalAudioUrl = publicUrlData.publicUrl;
       }
 
+      // Збереження в БД
       const { error } = await supabase.from("songs").insert([{ 
         title, 
         author: author || null, 
         content, 
         youtube_url: sourceType === "youtube" ? youtubeUrl : null, 
         audio_url: sourceType === "mp3" ? finalAudioUrl : null,
+        cover_url: finalCoverUrl, // Додали збереження обкладинки
         default_key: songKey, 
         bpm: bpm || null, 
         length: length || null 
@@ -148,7 +185,7 @@ export default function AddSongPage() {
     <div className="max-w-2xl mx-auto p-6 bg-black text-white min-h-screen">
       <h1 className="text-2xl font-bold mb-6 italic uppercase tracking-tighter">Додати нову пісню</h1>
       
-      {/* AI Upload Section - Три блоки (PDF, Word, JPG) */}
+      {/* AI Upload Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         
         {/* PDF Block */}
@@ -237,10 +274,31 @@ export default function AddSongPage() {
             </p>
           </label>
         </div>
-
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        
+        {/* Завантаження обкладинки */}
+        <div className="flex flex-col gap-2 mb-2">
+          <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Обкладинка альбому</label>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-[#111] border border-gray-800 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
+              {coverPreview ? (
+                <img src={coverPreview} alt="Cover Preview" className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleCoverChange}
+              className="p-2 w-full bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer transition-colors"
+            />
+          </div>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
@@ -302,7 +360,7 @@ export default function AddSongPage() {
               type="file"
               accept=".mp3,.wav,.m4a"
               onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-              className="p-2.5 bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+              className="p-2.5 bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer transition-colors"
             />
           )}
         </div>
