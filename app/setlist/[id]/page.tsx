@@ -58,7 +58,7 @@ export default function SetlistPage({ params }: PageProps) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSizeLevel] = useState(0);
   
-  const [layoutMode, setLayoutMode] = useState<'single' | 'two-column'>('single');
+  const [displayMode, setDisplayMode] = useState<'chords' | 'text'>('chords');
   
   const [isTeamShared, setIsTeamShared] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
@@ -112,7 +112,6 @@ const fetchSetlistAndSongs = useCallback(async () => {
     } catch (err) { 
       console.warn("Нет сети, пытаемся загрузить из оффлайн-кэша...", err);
       
-      // ОШИБКА / НЕТ СЕТИ: Достаем сохраненные данные из памяти телефона
       const cached = localStorage.getItem(`offline_setlist_${setlistId}`);
       if (cached) {
         try {
@@ -176,7 +175,6 @@ const fetchSetlistAndSongs = useCallback(async () => {
 
   // ОБРАБОТЧИК СВАЙПОВ
   const onTouchStart = (e: React.TouchEvent) => {
-    // Игнорируем свайпы, если открыта боковая панель редактирования
     if (isEditing) return;
     setTouchEnd(null);
     setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
@@ -193,7 +191,6 @@ const fetchSetlistAndSongs = useCallback(async () => {
     const isLeftSwipe = distanceX > minSwipeDistance;
     const isRightSwipe = distanceX < -minSwipeDistance;
     
-    // Проверяем, что свайп был больше горизонтальным, чем вертикальным (чтобы не переключать при прокрутке страницы вниз)
     if (Math.abs(distanceX) > Math.abs(distanceY)) {
       if (isLeftSwipe && currentIndex < songs.length - 1) {
         goToNext();
@@ -252,16 +249,15 @@ const fetchSetlistAndSongs = useCallback(async () => {
 
   return (
     <div 
-      className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} ${layoutMode === 'two-column' ? 'md:h-screen md:overflow-hidden md:flex md:flex-col' : 'min-h-screen'}`}
+      className={`transition-colors duration-500 ${theme === 'dark' ? 'bg-black text-white' : 'bg-gray-100 text-black'} min-h-screen`}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEndHandler}
     >
-      <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''} ${layoutMode === 'two-column' ? 'md:flex md:flex-col md:flex-grow md:min-h-0' : ''}`}>
+      <div className={`transition-all duration-500 ${isEditing ? 'md:mr-[350px]' : ''}`}>
         
-        <div className={`sticky top-0 w-full flex justify-between items-center p-2 md:p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'} ${layoutMode === 'two-column' ? 'md:flex-shrink-0' : ''}`}>
+        <div className={`sticky top-0 w-full flex justify-between items-center p-2 md:p-4 z-[100] print:hidden border-b ${theme === 'dark' ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
           
-          {/* Левая часть (Назад и навигация) */}
           <div className="flex gap-2 md:gap-4 items-center">
             <Link href="/setlists" className={`p-1.5 md:p-2 rounded-lg border transition-colors ${theme === 'dark' ? 'bg-black border-gray-800 text-gray-400 hover:text-blue-500' : 'bg-white border-gray-200 text-gray-600'}`}>
               <span className="text-sm md:text-base">←</span>
@@ -273,14 +269,12 @@ const fetchSetlistAndSongs = useCallback(async () => {
             </div>
           </div>
           
-          {/* Центр (Название сетлиста - только на десктопе) */}
           <div className="absolute left-1/2 -translate-x-1/2 hidden md:block max-w-[40%] pointer-events-none">
             <h2 className={`text-[10px] font-black uppercase tracking-[0.4em] truncate text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               {setlistTitle}
             </h2>
           </div>
 
-          {/* Правая часть (Метроном, Настройки, Редактировать) */}
           <div className="flex items-center gap-2 md:gap-3">
             {songs[currentIndex] && <Metronome bpm={songs[currentIndex].bpm || 120} />}
             
@@ -307,11 +301,11 @@ const fetchSetlistAndSongs = useCallback(async () => {
                       </div>
                     </div>
                     
-                    <div className="hidden md:block">
-                      <p className="text-[8px] md:text-[9px] text-gray-500 uppercase font-black mb-2 md:mb-3 tracking-widest text-center">ВИГЛЯД (DESKTOP)</p>
+                    <div>
+                      <p className="text-[8px] md:text-[9px] text-gray-500 uppercase font-black mb-2 md:mb-3 tracking-widest text-center">ВІДОБРАЖЕННЯ</p>
                       <div className={`flex p-1 rounded-xl border ${theme === 'dark' ? 'bg-black border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                        <button onClick={() => setLayoutMode('single')} className={`flex-1 py-1.5 md:py-2 text-[9px] md:text-[10px] font-black rounded-lg transition-all ${layoutMode === 'single' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>1 СТОВПЕЦЬ</button>
-                        <button onClick={() => setLayoutMode('two-column')} className={`flex-1 py-1.5 md:py-2 text-[9px] md:text-[10px] font-black rounded-lg transition-all ${layoutMode === 'two-column' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>2 СТОВПЦІ</button>
+                        <button onClick={() => setDisplayMode('chords')} className={`flex-1 py-1.5 md:py-2 text-[9px] md:text-[10px] font-black rounded-lg transition-all ${displayMode === 'chords' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>З АКОРДАМИ</button>
+                        <button onClick={() => setDisplayMode('text')} className={`flex-1 py-1.5 md:py-2 text-[9px] md:text-[10px] font-black rounded-lg transition-all ${displayMode === 'text' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>ТІЛЬКИ ТЕКСТ</button>
                       </div>
                     </div>
 
@@ -353,7 +347,7 @@ const fetchSetlistAndSongs = useCallback(async () => {
           </div>
         </div>
 
-        <div className={`w-full ${layoutMode === 'two-column' ? 'md:flex-grow md:min-h-0 md:flex md:flex-col' : ''}`}>
+        <div className="w-full">
           {songs[currentIndex] && (
             <SongView 
               key={songs[currentIndex].id} 
@@ -361,8 +355,11 @@ const fetchSetlistAndSongs = useCallback(async () => {
               initialContent={songs[currentIndex].content || ""} 
               youtubeUrl={songs[currentIndex].youtube_url}
               audioUrl={songs[currentIndex].audio_url}
-              theme={theme} fontSizeLevel={fontSizeLevel} capo={capo} semitones={semitones} 
-              layoutMode={layoutMode} 
+              theme={theme} 
+              fontSizeLevel={fontSizeLevel} 
+              capo={capo} 
+              semitones={semitones} 
+              displayMode={displayMode} 
             />
           )}
         </div>

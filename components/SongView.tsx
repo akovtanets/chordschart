@@ -16,6 +16,7 @@ interface SongViewProps {
   capo: number;
   semitones: number;
   layoutMode?: 'single' | 'two-column';
+  displayMode?: 'chords' | 'text'; // НОВИЙ ПРОП
 }
 
 interface SongSection {
@@ -32,7 +33,8 @@ export default function SongView({
   fontSizeLevel, 
   capo, 
   semitones,
-  layoutMode = 'single'
+  layoutMode = 'single',
+  displayMode = 'chords' // ДЕФОЛТНЕ ЗНАЧЕННЯ
 }: SongViewProps) {
   const [song, setSong] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -223,6 +225,36 @@ const renderLineContent = (line: string) => {
     const textSizes = ["text-base md:text-xl", "text-xl md:text-3xl", "text-2xl md:text-4xl"];
     const margins = ["mb-3 md:mb-5", "mb-6 md:mb-8", "mb-8 md:mb-10"];
 
+    // ОБРОБКА РЕЖИМУ "ТІЛЬКИ ТЕКСТ"
+    if (displayMode === 'text') {
+      if (!hasChords) {
+        return (
+          <div className={`flex flex-col ${margins[fontSizeLevel]}`}>
+            <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+              {line}
+            </span>
+          </div>
+        );
+      }
+
+      const parts = line.split(/(\[.*?\])/g);
+      let textOnlyLine = "";
+      parts.forEach(part => {
+        if (!part.startsWith('[')) textOnlyLine += part;
+      });
+
+      if (!textOnlyLine.replace(/[|\s]/g, '').trim()) return null;
+
+      return (
+        <div className={`flex flex-col ${margins[fontSizeLevel]}`}>
+          <span className={`font-mono whitespace-pre-wrap leading-tight ${textSizes[fontSizeLevel]} ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+            {textOnlyLine}
+          </span>
+        </div>
+      );
+    }
+
+    // СТАНДАРТНИЙ РЕЖИМ (З АКОРДАМИ)
     if (!hasChords) {
       return (
         <div className={`flex flex-col ${margins[fontSizeLevel]}`}>
@@ -252,7 +284,6 @@ const renderLineContent = (line: string) => {
     });
     pairs.push({ chord: currentChord, text: currentText });
 
-    // Проверяем, является ли строка чисто инструментальной (нет обычного текста, кроме пробелов и символов '|')
     const isInstrumentalLine = pairs.every(p => !p.text.replace(/[|\s]/g, ''));
 
     if (isInstrumentalLine) {
@@ -316,6 +347,16 @@ const renderLineContent = (line: string) => {
     return { type: isHeader ? finalHeader : "СЕКЦІЯ", lines: isHeader ? lines.slice(1) : lines };
   });
 
+  // ФІЛЬТРАЦІЯ ПОРОЖНІХ СЕКЦІЙ ДЛЯ РЕЖИМУ "ТІЛЬКИ ТЕКСТ"
+  const visibleSections = displayMode === 'text' 
+    ? sections.filter(section => {
+        return section.lines.some(line => {
+           const textOnly = line.replace(/\[.*?\]/g, '').replace(/[|\s]/g, '').trim();
+           return textOnly.length > 0;
+        });
+      })
+    : sections;
+
   const activeAudioUrl = song?.audio_url || audioUrl;
   const activeYoutubeUrl = song?.youtube_url || youtubeUrl;
 
@@ -352,7 +393,7 @@ const renderLineContent = (line: string) => {
           </div>
           {/* НОВАЯ НАВИГАЦИЯ (Внутри Sticky Шапки) */}
           <div className={`w-full flex flex-wrap justify-start gap-2 md:gap-3 transition-all duration-500 ${isScrolled ? 'mt-3' : 'mt-5'}`}>
-            {sections.map((section, idx) => (
+            {visibleSections.map((section, idx) => (
               <button
                 key={`nav-${idx}`}
                 onClick={() => {
@@ -445,7 +486,7 @@ const renderLineContent = (line: string) => {
                 columnFill: 'auto'
               }}
             >
-              {sections.map((section, idx) => (
+              {visibleSections.map((section, idx) => (
                 <div
                   key={idx}
                   id={`section-${idx}`}
@@ -477,7 +518,7 @@ const renderLineContent = (line: string) => {
           className={`w-full max-w-[1200px] mx-auto flex flex-col gap-6 pb-20 ${layoutMode === 'two-column' ? 'md:hidden' : 'px-[5px] md:px-[5px] py-4'}`}
           ref={layoutMode === 'single' ? sectionsContainerRef : null}
         >
-          {sections.map((section, idx) => (
+          {visibleSections.map((section, idx) => (
             <div 
               key={idx} 
               id={`section-${idx}`}
