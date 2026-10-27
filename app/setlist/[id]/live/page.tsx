@@ -114,6 +114,7 @@ export default function LiveModePage({ params }: PageProps) {
       <div className="flex-1 overflow-y-auto bg-black relative pb-24">
         {songs[currentIndex] && (
           <SongView
+            key={songs[currentIndex].id}
             songId={songs[currentIndex].id}
             initialContent={songs[currentIndex].content || ""}
             theme="dark"

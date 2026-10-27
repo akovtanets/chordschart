@@ -46,7 +46,7 @@ export default function SongView({
   
 }: SongViewProps) {
   const [song, setSong] = useState<any>(songData);
-  const [loading, setLoading] = useState(songData);
+  const [loading, setLoading] = useState(!songData);
   const [isScrolled, setIsScrolled] = useState(false);
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
   const hasSnappedRef = useRef(false);
