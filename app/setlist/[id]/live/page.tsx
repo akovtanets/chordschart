@@ -113,15 +113,19 @@ export default function LiveModePage({ params }: PageProps) {
       {/* ЗОНА АКОРДІВ (Зі скролом, якщо пісня довга) */}
       <div className="flex-1 overflow-y-auto bg-black relative pb-24">
         {songs[currentIndex] && (
-          <SongView 
-            songId={songs[currentIndex].id} 
-            initialContent={songs[currentIndex].content || ""} 
+          <SongView
+            songId={songs[currentIndex].id}
+            initialContent={songs[currentIndex].content || ""}
             theme="dark"
-            fontSizeLevel={1} // Завжди трохи більший шрифт для сцени
-            capo={0} 
-            semitones={0} 
-            layoutMode="single" 
-          />
+            fontSizeLevel={1}
+            capo={0}
+            semitones={0}
+            displayMode="chords"
+            songData={songs[currentIndex]} // <--- КРИТИЧНО ДЛЯ ОФЛАЙНА (не делает запрос к БД)
+            onNextSong={goToNext}          // <--- ДЛЯ ГОРИЗОНТАЛЬНЫХ СВАЙПОВ
+            onPrevSong={goToPrev}          // <--- ДЛЯ ГОРИЗОНТАЛЬНЫХ СВАЙПОВ
+            isLiveMode={true}
+            />
         )}
       </div>
 

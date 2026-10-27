@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, use, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import SongView from "@/components/SongView";
@@ -24,6 +25,7 @@ interface Song {
 
 export default function SetlistPage({ params }: PageProps) {
   const [isOffline, setIsOffline] = useState(false);
+  const router = useRouter();
 
   // Отслеживание статуса сети
   useEffect(() => {
@@ -97,15 +99,7 @@ const fetchSetlistAndSongs = useCallback(async () => {
           const { data: songsData } = await supabase.from("songs").select("*").in("id", setlist.song_ids);
           if (songsData) {
             const sorted = setlist.song_ids.map((id: number) => songsData.find((s: Song) => s.id === Number(id))).filter(Boolean);
-            setSongs(sorted);
-            
-            // УСПЕШНО ЗАГРУЗИЛИ: Сохраняем сетлист и песни в localStorage для оффлайна
-            localStorage.setItem(`offline_setlist_${setlistId}`, JSON.stringify({
-              title: setlist.title,
-              is_team_shared: setlist.is_team_shared,
-              user_id: setlist.user_id,
-              songs: sorted
-            }));
+            setSongs(sorted);            
           }
         }
       }
@@ -129,6 +123,18 @@ const fetchSetlistAndSongs = useCallback(async () => {
       setLoading(false); 
     }
   }, [setlistId]);
+  const handleEnterOfflineMode = () => {
+  // Зберігаємо актуальні дані в кеш тільки зараз
+  localStorage.setItem(`offline_setlist_${setlistId}`, JSON.stringify({
+    title: setlistTitle,
+    is_team_shared: isTeamShared,
+    user_id: userId,
+    songs: songs
+  }));
+  
+  // Переходимо на сторінку лайв-режиму
+  router.push(`/setlist/${setlistId}/live`);
+};
 
   useEffect(() => { fetchSetlistAndSongs(); }, [fetchSetlistAndSongs]);
 
@@ -274,8 +280,15 @@ const fetchSetlistAndSongs = useCallback(async () => {
               {setlistTitle}
             </h2>
           </div>
-
+          
           <div className="flex items-center gap-2 md:gap-3">
+            <button
+              onClick={handleEnterOfflineMode}
+              className="flex items-center gap-2 px-3 md:px-5 py-1.5 md:py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition-all shadow-[0_0_15px_rgba(220,38,38,0.3)]"
+            >
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest whitespace-nowrap">OFFLINE MODE</span>
+            </button>
             {songs[currentIndex] && <Metronome bpm={songs[currentIndex].bpm || 120} />}
             
             <div className="relative">

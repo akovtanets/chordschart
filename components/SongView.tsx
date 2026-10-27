@@ -16,7 +16,11 @@ interface SongViewProps {
   capo: number;
   semitones: number;
   layoutMode?: 'single' | 'two-column';
-  displayMode?: 'chords' | 'text'; // НОВИЙ ПРОП
+  displayMode?: 'chords' | 'text'; 
+  songData?: any;          
+  onNextSong?: () => void; 
+  onPrevSong?: () => void; 
+  isLiveMode?: boolean; 
 }
 
 interface SongSection {
@@ -34,10 +38,15 @@ export default function SongView({
   capo, 
   semitones,
   layoutMode = 'single',
-  displayMode = 'chords' // ДЕФОЛТНЕ ЗНАЧЕННЯ
+  displayMode = 'chords', 
+  songData = null, 
+  onNextSong,      
+  onPrevSong,
+  isLiveMode = false       
+  
 }: SongViewProps) {
-  const [song, setSong] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [song, setSong] = useState<any>(songData);
+  const [loading, setLoading] = useState(songData);
   const [isScrolled, setIsScrolled] = useState(false);
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
   const hasSnappedRef = useRef(false);
@@ -363,7 +372,15 @@ const renderLineContent = (line: string) => {
   return (
     <div className={`w-full transition-colors duration-500 ${theme === 'dark' ? 'bg-[#050505]' : 'bg-gray-100'} ${layoutMode === 'two-column' ? 'md:h-full md:flex md:flex-col md:min-h-0' : 'min-h-screen'}`}>
       
-      <div id="sticky-header" className={`w-full sticky top-[73px] z-[90] transition-all duration-500 flex-shrink-0 ${theme === 'dark' ? 'bg-[#050505]/95 backdrop-blur-sm border-b border-gray-900' : 'bg-gray-100/95 backdrop-blur-sm border-b border-gray-200'} ${layoutMode === 'two-column' ? 'md:relative md:top-0' : ''}`}>
+      {/* Если isLiveMode, делаем шапку relative (она будет уезжать вверх при скролле). Если нет — sticky */}
+      <div 
+        id="sticky-header" 
+        className={`w-full transition-all duration-500 flex-shrink-0 ${
+          isLiveMode 
+            ? 'relative z-10 bg-black border-b border-gray-900' 
+            : `sticky top-[73px] z-[90] ${theme === 'dark' ? 'bg-[#050505] border-b border-gray-900' : 'bg-gray-100 border-b border-gray-200'}`
+        }`}
+      >
         <div className={`w-full max-w-[1200px] mx-auto px-4 md:px-6 transition-all duration-500 ${isScrolled ? 'py-3' : 'py-5'}`}>
           
           <div className="flex flex-col justify-center">
