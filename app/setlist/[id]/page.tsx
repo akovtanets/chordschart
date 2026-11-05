@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import SongView from "@/components/SongView";
 import Metronome from "@/components/Metronome";
 import Link from "next/link";
+import ProModal from "@/components/ProModal";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -66,6 +67,11 @@ export default function SetlistPage({ params }: PageProps) {
   const [isOwner, setIsOwner] = useState(false);
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
 
+  // НОВІ СТЕЙТИ ДЛЯ ПІДПИСКИ ТА МОДАЛКИ ПРО-ВЕРСІЇ
+  const [isPro, setIsPro] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [proFeatureName, setProFeatureName] = useState("");
+
   // Стейт для обработки свайпов
   const [touchStart, setTouchStart] = useState<{ x: number, y: number } | null>(null);
   const [touchEnd, setTouchEnd] = useState<{ x: number, y: number } | null>(null);
@@ -73,11 +79,22 @@ export default function SetlistPage({ params }: PageProps) {
   // Минимальная длина свайпа для срабатывания (в пикселях)
   const minSwipeDistance = 50;
 
-const fetchSetlistAndSongs = useCallback(async () => {
+  const fetchSetlistAndSongs = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id || null;
       setUserId(currentUserId);
+
+      // НОВИЙ БЛОК: Запитуємо статус підписки з БД
+      if (currentUserId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_pro")
+          .eq("id", currentUserId)
+          .single();
+        
+        setIsPro(profile?.is_pro || false);
+      }
 
       const { data: teamMembership } = await supabase
         .from("team_members")
@@ -123,18 +140,26 @@ const fetchSetlistAndSongs = useCallback(async () => {
       setLoading(false); 
     }
   }, [setlistId]);
+
   const handleEnterOfflineMode = () => {
-  // Зберігаємо актуальні дані в кеш тільки зараз
-  localStorage.setItem(`offline_setlist_${setlistId}`, JSON.stringify({
-    title: setlistTitle,
-    is_team_shared: isTeamShared,
-    user_id: userId,
-    songs: songs
-  }));
-  
-  // Переходимо на сторінку лайв-режиму
-  router.push(`/setlist/${setlistId}/live`);
-};
+    // НОВИЙ БЛОК: Перевірка PRO для Офлайн-режиму
+    if (!isPro) {
+      setProFeatureName("Офлайн-режим (Live Mode)");
+      setShowProModal(true);
+      return;
+    }
+
+    // Зберігаємо актуальні дані в кеш тільки зараз
+    localStorage.setItem(`offline_setlist_${setlistId}`, JSON.stringify({
+      title: setlistTitle,
+      is_team_shared: isTeamShared,
+      user_id: userId,
+      songs: songs
+    }));
+    
+    // Переходимо на сторінку лайв-режиму
+    router.push(`/setlist/${setlistId}/live`);
+  };
 
   useEffect(() => { fetchSetlistAndSongs(); }, [fetchSetlistAndSongs]);
 
@@ -341,12 +366,37 @@ const fetchSetlistAndSongs = useCallback(async () => {
                       </div>
                     </div>
                     {isOwner && userTeamId && (
-                      <button onClick={() => setIsTeamShared(!isTeamShared)} className={`w-full py-2 md:py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 md:gap-3 ${isTeamShared ? 'border-blue-600 bg-blue-600/10 text-blue-400' : (theme === 'dark' ? 'border-gray-800 bg-black text-gray-500' : 'border-gray-200 bg-white text-gray-400')}`}>
+                      <button 
+                        onClick={() => {
+                          // НОВИЙ БЛОК: Перевірка PRO для Командного доступу
+                          if (!isPro) {
+                            setProFeatureName("Спільний доступ для команди");
+                            setShowProModal(true);
+                            return;
+                          }
+                          setIsTeamShared(!isTeamShared);
+                        }} 
+                        className={`w-full py-2 md:py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 md:gap-3 ${isTeamShared ? 'border-blue-600 bg-blue-600/10 text-blue-400' : (theme === 'dark' ? 'border-gray-800 bg-black text-gray-500' : 'border-gray-200 bg-white text-gray-400')}`}
+                      >
                         <div className={`w-2.5 h-2.5 md:w-3 md:h-3 rounded-full ${isTeamShared ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-700'}`}></div>
                         <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">Для команди</span>
                       </button>
                     )}
-                    <button onClick={() => { setShowSettings(false); setTimeout(() => window.print(), 100); }} className="w-full py-2 md:py-3 rounded-xl bg-blue-600 text-white font-black text-[8px] md:text-[9px] uppercase tracking-widest">Експорт PDF</button>
+                    <button 
+                      onClick={() => { 
+                        // НОВИЙ БЛОК: Перевірка PRO для PDF-експорту
+                        if (!isPro) {
+                          setProFeatureName("Експорт сетлістів у PDF");
+                          setShowProModal(true);
+                          return;
+                        }
+                        setShowSettings(false); 
+                        setTimeout(() => window.print(), 100); 
+                      }} 
+                      className="w-full py-2 md:py-3 rounded-xl bg-blue-600 text-white font-black text-[8px] md:text-[9px] uppercase tracking-widest"
+                    >
+                      Експорт PDF
+                    </button>
                   </div>
                 </div>
               )}
@@ -411,6 +461,13 @@ const fetchSetlistAndSongs = useCallback(async () => {
           ))}
         </div>
       </div>
+
+      {/* НОВИЙ БЛОК: Виклик модального вікна пейволу */}
+      <ProModal 
+        isOpen={showProModal} 
+        onClose={() => setShowProModal(false)} 
+        featureName={proFeatureName} 
+      />
     </div>
   );
 }
