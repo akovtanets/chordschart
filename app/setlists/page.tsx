@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import ProModal from "@/components/ProModal"; // ДОБАВЛЕНО: Импорт ProModal
 
 function SetlistsListContent() {
   const searchParams = useSearchParams();
@@ -14,10 +15,13 @@ function SetlistsListContent() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Зберігаємо список всіх команд, де користувач має право шарити сетлісти (leader або admin)
+  // ДОБАВЛЕНО: Стейты для подписки и лимитов
+  const [isPro, setIsPro] = useState(false);
+  const [monthlySetlistCount, setMonthlySetlistCount] = useState(0);
+  const [showProModal, setShowProModal] = useState(false);
+  const [proFeatureName, setProFeatureName] = useState("");
+
   const [userAdminTeams, setUserAdminTeams] = useState<any[]>([]);
-  
-  // Стан для випадаючого меню шарингу (який сетліст зараз відкритий)
   const [openShareMenuId, setOpenShareMenuId] = useState<string | null>(null);
   const shareMenuRef = useRef<HTMLDivElement>(null);
 
@@ -25,7 +29,6 @@ function SetlistsListContent() {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [currentMonth, setCurrentMonth] = useState(initialDate);
 
-  // Закриття меню шарингу при кліку зовні
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (shareMenuRef.current && !shareMenuRef.current.contains(event.target as Node)) {
@@ -43,7 +46,31 @@ function SetlistsListContent() {
 
     if (!currentUserId) return;
 
-    // 1. Отримуємо команди, де користувач має право поширювати сетлісти
+    // ДОБАВЛЕНО: 1. Отримуємо статус PRO
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_pro")
+      .eq("id", currentUserId)
+      .single();
+    
+    const userIsPro = profile?.is_pro || false;
+    setIsPro(userIsPro);
+
+    // ДОБАВЛЕНО: 2. Рахуємо кількість сетлістів за поточний місяць
+    if (!userIsPro) {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count } = await supabase
+        .from("setlists")
+        .select("*", { count: 'exact', head: true })
+        .eq("user_id", currentUserId)
+        .gte("created_at", startOfMonth.toISOString());
+      
+      setMonthlySetlistCount(count || 0);
+    }
+
     const { data: adminMemberships } = await supabase
       .from("team_members")
       .select("team_id, teams(*)")
@@ -55,7 +82,6 @@ function SetlistsListContent() {
       setUserAdminTeams(teams);
     }
 
-    // 2. Отримуємо всі команди користувача для фільтрації сетлістів
     const { data: allMemberships } = await supabase
       .from("team_members")
       .select("team_id")
@@ -63,7 +89,6 @@ function SetlistsListContent() {
     
     const teamIds = allMemberships?.map(m => m.team_id) || [];
 
-    // 3. Формуємо запит на сетлісти
     let query = supabase.from("setlists").select("*");
 
     if (teamIds.length > 0) {
@@ -101,6 +126,16 @@ function SetlistsListContent() {
       ));
     }
     setOpenShareMenuId(null);
+  };
+
+  // ДОБАВЛЕНО: Функція обробки кліку "Створити"
+  const handleCreateClick = () => {
+    if (!isPro && monthlySetlistCount >= 4) {
+      setProFeatureName("Створення понад 4 сетлістів на місяць");
+      setShowProModal(true);
+      return;
+    }
+    router.push(`/create-setlist?date=${selectedDate.toISOString()}`);
   };
 
   const filteredLists = useMemo(() => {
@@ -145,7 +180,7 @@ function SetlistsListContent() {
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center font-mono text-[10px] text-gray-700 uppercase tracking-widest">Синхронізація...</div>;
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-12">
+    <main className="min-h-screen bg-black text-white p-6 md:p-12 relative">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12">
         
         <aside className="w-full md:w-[300px] flex-shrink-0">
@@ -171,16 +206,28 @@ function SetlistsListContent() {
           <div className="flex justify-between items-end mb-12">
             <div>
               <h1 className="text-4xl font-bold tracking-tight uppercase italic leading-none">Сет-листи</h1>
-              <p className="text-blue-500 text-[10px] uppercase mt-2 tracking-widest font-black">
-                {selectedDate.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}
+              <p className="text-blue-500 text-[10px] uppercase mt-2 tracking-widest font-black flex items-center gap-4">
+                <span>{selectedDate.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                
+                {/* ДОБАВЛЕНО: Відображення лімітів для Free юзерів */}
+                {!isPro && (
+                  <span className="text-gray-500 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-800">
+                    Використано: {monthlySetlistCount}/4
+                  </span>
+                )}
               </p>
             </div>
-            <Link 
-              href={`/create-setlist?date=${selectedDate.toISOString()}`} 
-              className="bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all"
+            
+            {/* ИЗМЕНЕНО: Кнопка "Створити" теперь проверяет лимит */}
+            <button 
+              onClick={handleCreateClick}
+              className="bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all flex items-center gap-2"
             >
-              + Створити
-            </Link>
+              <span>+ Створити</span>
+              {!isPro && monthlySetlistCount >= 4 && (
+                <div className="w-2 h-2 bg-red-500 rounded-full" title="Ліміт вичерпано"></div>
+              )}
+            </button>
           </div>
 
           <div className="grid gap-4">
@@ -212,13 +259,18 @@ function SetlistsListContent() {
 
                         <div className="flex items-center gap-4">
                           
-                          {/* БЛОК ШАРИНГУ */}
                           {isMyList && userAdminTeams.length > 0 && (
                             <div className="relative">
+                              {/* ИЗМЕНЕНО: Кнопка шаринга теперь проверяет PRO статус */}
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
+                                  if (!isPro) {
+                                    setProFeatureName("Спільний доступ для команди");
+                                    setShowProModal(true);
+                                    return;
+                                  }
                                   setOpenShareMenuId(openShareMenuId === list.id ? null : list.id);
                                 }}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
@@ -233,7 +285,6 @@ function SetlistsListContent() {
                                 </span>
                               </button>
 
-                              {/* ВИПАДАЮЧЕ МЕНЮ ШАРИНГУ */}
                               {openShareMenuId === list.id && (
                                 <div ref={shareMenuRef} className="absolute right-0 top-full mt-2 w-48 bg-[#111] border border-gray-800 rounded-2xl shadow-2xl py-2 z-50">
                                   <div className="px-3 py-2 border-b border-gray-800 mb-1">
@@ -280,6 +331,13 @@ function SetlistsListContent() {
           </div>
         </section>
       </div>
+
+      {/* ДОБАВЛЕНО: Вызов модального окна */}
+      <ProModal 
+        isOpen={showProModal} 
+        onClose={() => setShowProModal(false)} 
+        featureName={proFeatureName} 
+      />
     </main>
   );
 }
