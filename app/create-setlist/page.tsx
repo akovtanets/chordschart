@@ -124,17 +124,39 @@ function CreateSetlistContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
 
+  // Стейты для лимитов и PRO / Fake Door модалки
+  const [isPro, setIsPro] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
-    async function fetchSongs() {
-      const { data } = await supabase.from("songs").select("id, title, author");
-      if (data) setAllSongs(data);
+    async function initData() {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (userId) {
+        // Перевіряємо, чи має юзер PRO статус
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_pro")
+          .eq("id", userId)
+          .single();
+        
+        setIsPro(profile?.is_pro || false);
+      }
+
+      // Завантажуємо пісні
+      const { data: songsData } = await supabase.from("songs").select("id, title, author");
+      if (songsData) setAllSongs(songsData);
+
+      setLoading(false);
     }
-    fetchSongs();
+    initData();
   }, []);
 
   const addSlot = () => {
@@ -164,14 +186,14 @@ function CreateSetlistContent() {
     }
   };
 
-  const handleSave = async () => {
+  // Фактичне збереження сетліста в базу
+  const executeSave = async () => {
     const finalIds = slots.map(s => s.songId).filter(id => id !== null);
     if (!title || finalIds.length === 0) return alert("Введіть назву та додайте пісні");
 
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
 
-    // Створюємо сетліст з датою з календаря (targetDate)
     const { error } = await supabase.from("setlists").insert({ 
       title, 
       song_ids: finalIds,
@@ -180,11 +202,53 @@ function CreateSetlistContent() {
     });
     
     if (!error) {
-      // Повертаємось на сторінку сетлістів з тією ж самою датою
       router.push(`/setlists?date=${targetDate.toISOString()}`);
     } else {
       alert("Помилка: " + error.message);
     }
+  };
+
+  // Перевірка ліміту перед збереженням (Fake Door для Free користувачів)
+  const handleSave = async () => {
+    const finalIds = slots.map(s => s.songId).filter(id => id !== null);
+    if (!title || finalIds.length === 0) return alert("Введіть назву та додайте пісні");
+
+    // Якщо у користувача PRO — зберігаємо одразу без перевірки лімітів
+    if (isPro) {
+      await executeSave();
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    if (!userId) return;
+
+    // Рахуємо початок поточного місяця
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    // Отримуємо кількість сетлістів, створених у цьому місяці
+    const { count, error } = await supabase
+      .from('setlists')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', startOfMonth.toISOString());
+
+    if (error) {
+      console.error("Помилка перевірки ліміту:", error);
+      return;
+    }
+
+    // Ліміт Free тарифу: 4 сетлісти на місяць
+    if (count !== null && count >= 4) {
+      setShowProModal(true); // Викликаємо модальне вікно Fake Door
+      return;
+    }
+
+    // Якщо ліміт не перевищено — виконуємо збереження
+    await executeSave();
   };
 
   const filteredSongs = searchQuery 
@@ -192,7 +256,7 @@ function CreateSetlistContent() {
     : [];
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white p-6 sm:p-12 font-sans">
+    <main className="min-h-screen bg-[#0a0a0a] text-white p-6 sm:p-12 font-sans relative">
       <div className="max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -241,12 +305,48 @@ function CreateSetlistContent() {
 
         <button 
           onClick={handleSave}
-          disabled={slots.length === 0}
+          disabled={slots.length === 0 || loading}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-600 py-5 rounded-[24px] font-bold text-lg transition-all shadow-xl shadow-blue-900/20 active:scale-[0.98]"
         >
           Опублікувати сет-лист
         </button>
       </div>
+
+      {/* FAKE DOOR / PRO MODAL */}
+      {showProModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0a] border border-gray-800 rounded-3xl p-6 md:p-8 max-w-md w-full relative shadow-[0_0_40px_rgba(37,99,235,0.15)]">
+            <button 
+              onClick={() => setShowProModal(false)} 
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-900 text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+            >
+              ✕
+            </button>
+
+            <div className="text-center mb-6 mt-2">
+              <div className="inline-block px-3 py-1 bg-blue-900/30 border border-blue-500/30 text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-4">
+                Ліміт вичерпано
+              </div>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white mb-2">
+                Досягнуто ліміт Free тарифу
+              </h2>
+              <p className="text-sm text-gray-400 mb-6">
+                На безкоштовному тарифі ви можете створити до 4 сетлістів на місяць. Перейдіть на PRO, щоб отримати безлімітне створення подій та офлайн-режим для сцени.
+              </p>
+              
+              <button 
+                onClick={() => {
+                  setShowProModal(false);
+                  router.push('/pricing'); // Перенаправляємо на сторінку тарифікації з Fake Door
+                }}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+              >
+                Дізнатися про PRO-доступ (знижка 50%)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

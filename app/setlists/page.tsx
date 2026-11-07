@@ -129,12 +129,20 @@ function SetlistsListContent() {
   };
 
   // ДОБАВЛЕНО: Функція обробки кліку "Створити"
-  const handleCreateClick = () => {
-    if (!isPro && monthlySetlistCount >= 4) {
-      setProFeatureName("Створення понад 4 сетлістів на місяць");
+ const handleCreateClick = async () => {
+    // Якщо у користувача PRO — одразу пускаємо на створення сетліста
+    if (isPro) {
+      router.push(`/create-setlist?date=${selectedDate.toISOString()}`);
+      return;
+    }
+
+    // Якщо ліміт вичерпано — показуємо модальне вікно Fake Door
+    if (monthlySetlistCount >= 4) {
       setShowProModal(true);
       return;
     }
+
+    // Якщо ліміт не вичерпано — переходимо на сторінку створення
     router.push(`/create-setlist?date=${selectedDate.toISOString()}`);
   };
 
@@ -333,11 +341,41 @@ function SetlistsListContent() {
       </div>
 
       {/* ДОБАВЛЕНО: Вызов модального окна */}
-      <ProModal 
-        isOpen={showProModal} 
-        onClose={() => setShowProModal(false)} 
-        featureName={proFeatureName} 
-      />
+     {/* FAKE DOOR / PRO MODAL */}
+      {showProModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0a] border border-gray-800 rounded-3xl p-6 md:p-8 max-w-md w-full relative shadow-[0_0_40px_rgba(37,99,235,0.15)]">
+            <button 
+              onClick={() => setShowProModal(false)} 
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-900 text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+            >
+              ✕
+            </button>
+
+            <div className="text-center mb-6 mt-2">
+              <div className="inline-block px-3 py-1 bg-blue-900/30 border border-blue-500/30 text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-full mb-4">
+                Ліміт вичерпано
+              </div>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white mb-2">
+                Досягнуто ліміт Free тарифу
+              </h2>
+              <p className="text-sm text-gray-400 mb-6">
+                На безкоштовному тарифі ви можете створити до 4 сетлістів на місяць. Перейдіть на PRO, щоб отримати безлімітне створення подій та офлайн-режим для сцени.
+              </p>
+              
+              <button 
+                onClick={() => {
+                  setShowProModal(false);
+                  router.push('/pricing'); // Перенаправляємо на сторінку тарифікації з Fake Door
+                }}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-widest rounded-xl text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+              >
+                Дізнатися про PRO-доступ (знижка 50%)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
