@@ -8,11 +8,11 @@ const ROLE_NAMES: Record<string, string> = {
   leader: "Лідер",
   vocalist: "Вокаліст",
   musician: "Музикант",
+  drummer: "Барабанщик",
   sound_engineer: "Звукорежисер"
 };
 
 export default function TeamPage() {
-  // Стани списку команд
   const [userTeams, setUserTeams] = useState<any[]>([]);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [isTeamSelectorOpen, setIsTeamSelectorOpen] = useState(false);
@@ -23,7 +23,6 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   
-  // Стани створення/редагування
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [creatingTeam, setCreatingTeam] = useState(false);
@@ -34,7 +33,6 @@ export default function TeamPage() {
   const [inviteStatus, setInviteStatus] = useState("");
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
-  // Закриття селектора команд при кліку зовні
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
@@ -45,7 +43,6 @@ export default function TeamPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 1. Завантажуємо ВСІ команди користувача
   useEffect(() => {
     fetchAllUserTeams();
   }, []);
@@ -58,19 +55,16 @@ export default function TeamPage() {
       const currentUserId = session.user.id;
       setUserId(currentUserId);
 
-      // Шукаємо команди, де юзер - власник
       const { data: ownedTeams } = await supabase
         .from("teams")
         .select("*")
         .eq("owner_id", currentUserId);
 
-      // Шукаємо команди, де юзер - учасник
       const { data: memberTeamsRaw } = await supabase
         .from("team_members")
         .select("team_id, teams(*)")
         .eq("user_id", currentUserId);
 
-      // Об'єднуємо та прибираємо дублікати
       const allTeamsMap = new Map();
       ownedTeams?.forEach(t => allTeamsMap.set(t.id, t));
       memberTeamsRaw?.forEach(m => { 
@@ -82,7 +76,6 @@ export default function TeamPage() {
       setUserTeams(allTeams);
 
       if (allTeams.length > 0) {
-        // Якщо передали ID нової команди - вибираємо її, інакше першу зі списку
         if (newTeamIdToSelect) {
           setActiveTeamId(newTeamIdToSelect);
         } else if (!activeTeamId) {
@@ -99,7 +92,6 @@ export default function TeamPage() {
     }
   }
 
-  // 2. Завантажуємо учасників КОНКРЕТНОЇ активної команди
   useEffect(() => {
     if (activeTeamId) {
       fetchTeamMembers(activeTeamId);
@@ -131,6 +123,15 @@ export default function TeamPage() {
     } catch (err: any) { alert("Помилка: " + err.message); }
   };
 
+  const handleRemoveMember = async (memberId: string) => {
+    if (!confirm("Видалити цього учасника з команди?")) return;
+    try {
+      const { error } = await supabase.from("team_members").delete().eq("id", memberId);
+      if (error) throw error;
+      setMembers(prev => prev.filter(m => m.id !== memberId));
+    } catch (err: any) { alert("Помилка видалення: " + err.message); }
+  };
+
   const handleCreateTeam = async () => {
     if (!teamName.trim() || !userId) return;
     setCreatingTeam(true);
@@ -143,7 +144,6 @@ export default function TeamPage() {
 
       setTeamName("");
       setIsCreateModalOpen(false);
-      // Оновлюємо список і відразу перемикаємось на нову команду
       await fetchAllUserTeams(newTeam.id);
     } catch (err: any) { alert("Не вдалося створити: " + err.message); } 
     finally { setCreatingTeam(false); }
@@ -186,7 +186,6 @@ export default function TeamPage() {
           </div>
           
           <div className="flex flex-col md:items-end gap-3">
-            {/* СЕЛЕКТОР КОМАНД */}
             {userTeams.length > 0 && (
               <div className="relative" ref={selectorRef}>
                 <button 
@@ -227,7 +226,6 @@ export default function TeamPage() {
           </div>
         </header>
 
-        {/* Якщо немає команд */}
         {userTeams.length === 0 ? (
           <div className="bg-[#0a0c10] border border-gray-900 rounded-[40px] p-10 md:p-20 text-center shadow-2xl animate-in fade-in zoom-in-95">
             <h2 className="text-3xl font-black uppercase italic mb-4">У вас ще немає гурту</h2>
@@ -263,6 +261,7 @@ export default function TeamPage() {
                                 <option value="leader">Лідер</option>
                                 <option value="vocalist">Вокаліст</option>
                                 <option value="musician">Музикант</option>
+                                <option value="drummer">Барабанщик</option>
                                 <option value="sound_engineer">Звукорежисер</option>
                               </select>
                             ) : (
@@ -275,6 +274,17 @@ export default function TeamPage() {
                             )}
                           </div>
                         </div>
+
+                        {/* Кнопка видалення учасника (тільки для власника і не для самого себе) */}
+                        {isOwner && m.user_id !== userId && (
+                          <button 
+                            onClick={() => handleRemoveMember(m.id)}
+                            className="text-gray-600 hover:text-red-500 text-xs font-bold uppercase tracking-widest px-3 py-2 transition-colors"
+                            title="Видалити учасника"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -298,6 +308,7 @@ export default function TeamPage() {
                           <option value="leader">Лідер</option>
                           <option value="vocalist">Вокаліст</option>
                           <option value="musician">Музикант</option>
+                          <option value="drummer">Барабанщик</option>
                           <option value="sound_engineer">Звукорежисер</option>
                         </select>
                         <button onClick={handleInviteUser} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg">Додати</button>
@@ -311,7 +322,6 @@ export default function TeamPage() {
           </div>
         )}
 
-        {/* Модальне вікно створення команди */}
         {isCreateModalOpen && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <div className="bg-[#0d0d0d] border border-gray-800 rounded-[32px] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
