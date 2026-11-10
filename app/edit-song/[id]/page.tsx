@@ -13,11 +13,8 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
   const [author, setAuthor] = useState(""); 
   const [content, setContent] = useState("");
   
-  // Джерело аудіо/відео
-  const [sourceType, setSourceType] = useState<"youtube" | "mp3">("youtube");
+  // Джерело відео (тільки YouTube)
   const [youtubeUrl, setYoutubeUrl] = useState(""); 
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [existingAudioUrl, setExistingAudioUrl] = useState<string | null>(null);
 
   // Обкладинка
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -46,15 +43,7 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
         setTitle(data.title);
         setAuthor(data.author || ""); 
         setContent(data.content);
-        
-        // Визначаємо джерело аудіо
-        if (data.audio_url) {
-          setSourceType("mp3");
-          setExistingAudioUrl(data.audio_url);
-        } else if (data.youtube_url) {
-          setSourceType("youtube");
-          setYoutubeUrl(data.youtube_url);
-        }
+        setYoutubeUrl(data.youtube_url || "");
 
         // Завантажуємо існуючу обкладинку, якщо є
         if (data.cover_url) {
@@ -74,15 +63,40 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCoverFile(file);
-      setCoverPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    // 1. Перевірка типу файлу обкладинки
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Будь ласка, оберіть коректне зображення (JPG, PNG або WebP).");
+      e.target.value = ""; 
+      return;
     }
+
+    // 2. Перевірка розміру (макс. 5 МБ)
+    const maxSize = 5 * 1024 * 1024; 
+    if (file.size > maxSize) {
+      alert("Розмір файлу завеликий. Максимальний розмір обкладинки — 5 МБ.");
+      e.target.value = ""; 
+      return;
+    }
+
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!captchaToken) return;
+
+    // ВАЛІДАЦІЯ YOUTUBE URL
+    if (youtubeUrl.trim() !== "") {
+      const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/)|youtu\.be\/)[\w-]{11}(&.*)?$/;
+      if (!youtubeRegex.test(youtubeUrl.trim())) {
+        alert("Будь ласка, введіть коректне посилання на YouTube (напр., https://www.youtube.com/watch?v=...)");
+        return;
+      }
+    }
 
     setSaving(true);
 
@@ -103,7 +117,6 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
         return;
       }
 
-      let finalAudioUrl = existingAudioUrl;
       let finalCoverUrl = existingCoverUrl;
 
       // Завантаження нової Обкладинки
@@ -128,29 +141,6 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
         finalCoverUrl = coverUrlData.publicUrl;
       }
 
-      // Завантаження нового MP3
-      if (sourceType === "mp3" && audioFile) {
-        const fileExt = audioFile.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `audio/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("songs-audio")
-          .upload(filePath, audioFile);
-
-        if (uploadError) {
-          alert(`Помилка завантаження аудіо: ${uploadError.message}`);
-          setSaving(false);
-          return;
-        }
-
-        const { data: publicUrlData } = supabase.storage
-          .from("songs-audio")
-          .getPublicUrl(filePath);
-
-        finalAudioUrl = publicUrlData.publicUrl;
-      }
-
       // ОНОВЛЮЄМО ДАНІ В БАЗІ
       const { error } = await supabase
         .from("songs")
@@ -158,9 +148,8 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
           title, 
           author: author || null, 
           content, 
-          youtube_url: sourceType === "youtube" ? youtubeUrl : null, 
-          audio_url: sourceType === "mp3" ? finalAudioUrl : null,
-          cover_url: finalCoverUrl, // Оновлюємо посилання на обкладинку
+          youtube_url: youtubeUrl.trim() || null, 
+          cover_url: finalCoverUrl,
           default_key: songKey, 
           bpm: bpm || null, 
           length: length || null 
@@ -240,51 +229,16 @@ export default function EditSongPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
 
-        {/* Перемикач джерела аудіо/відео */}
+        {/* Джерело звуку (Тільки YouTube) */}
         <div className="flex flex-col gap-2">
-          <div className="flex justify-between items-center">
-            <label className="text-[10px] text-gray-500 uppercase ml-1 font-bold tracking-widest">Джерело звуку</label>
-            <div className="flex gap-2">
-              <button 
-                type="button" 
-                onClick={() => setSourceType("youtube")} 
-                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'youtube' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
-              >
-                YouTube
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setSourceType("mp3")} 
-                className={`px-3 py-1 text-[9px] font-bold uppercase rounded-md transition-all ${sourceType === 'mp3' ? 'bg-blue-600 text-white' : 'bg-[#111] text-gray-400'}`}
-              >
-                MP3 файл
-              </button>
-            </div>
-          </div>
-
-          {sourceType === "youtube" ? (
-            <input
-              type="text"
-              placeholder="https://www.youtube.com/watch?v=..."
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
-            />
-          ) : (
-            <div className="flex flex-col gap-2">
-              {existingAudioUrl && !audioFile && (
-                <p className="text-xs text-gray-400 ml-1">
-                  Поточний файл: <a href={existingAudioUrl} target="_blank" className="text-blue-400 underline">слухати</a>
-                </p>
-              )}
-              <input
-                type="file"
-                accept=".mp3,.wav,.m4a"
-                onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
-                className="p-2.5 bg-[#111] border border-gray-800 rounded-lg text-xs text-gray-400 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer"
-              />
-            </div>
-          )}
+          <label className="text-[10px] text-gray-500 uppercase ml-1 font-bold tracking-widest">Посилання на YouTube</label>
+          <input
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            className="w-full p-3 bg-[#111] border border-gray-800 rounded-lg focus:outline-none focus:border-[#0090ff] transition-colors"
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-4">

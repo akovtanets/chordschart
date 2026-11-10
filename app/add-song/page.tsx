@@ -73,10 +73,26 @@ export default function AddSongPage() {
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCoverFile(file);
-      setCoverPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    // 1. Проверка типа файла (разрешаем только популярные форматы изображений)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Будь ласка, оберіть коректне зображення (JPG, PNG або WebP).");
+      e.target.value = ""; // Очищаем инпут
+      return;
     }
+
+    // 2. Проверка размера файла (максимум 5 МБ)
+    const maxSize = 5 * 1024 * 1024; // 5 MB в байтах
+    if (file.size > maxSize) {
+      alert("Розмір файлу завеликий. Максимальний розмір обкладинки — 5 МБ.");
+      e.target.value = ""; // Очищаем инпут
+      return;
+    }
+
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,6 +100,15 @@ export default function AddSongPage() {
     if (!captchaToken) {
       alert("Будь ласка, пройдіть перевірку капчею.");
       return;
+    }
+
+    // ВАЛИДАЦИЯ YOUTUBE URL: если поле заполнено, проверяем формат ссылки
+    if (youtubeUrl.trim() !== "") {
+      const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/)|youtu\.be\/)[\w-]{11}(&.*)?$/;
+      if (!youtubeRegex.test(youtubeUrl.trim())) {
+        alert("Будь ласка, введіть коректне посилання на YouTube (напр., https://www.youtube.com/watch?v=...)");
+        return;
+      }
     }
 
     setLoading(true);
@@ -105,7 +130,6 @@ export default function AddSongPage() {
         return;
       }
 
-      let finalAudioUrl = null;
       let finalCoverUrl = null;
 
       // Завантаження Обкладинки (якщо обрана)
@@ -130,14 +154,12 @@ export default function AddSongPage() {
         finalCoverUrl = coverUrlData.publicUrl;
       }
 
-      
-
       // Збереження в БД
       const { error } = await supabase.from("songs").insert([{ 
         title, 
         author: author || null, 
         content, 
-        youtube_url: youtubeUrl || null, 
+        youtube_url: youtubeUrl.trim() || null, 
         cover_url: finalCoverUrl,
         default_key: songKey, 
         bpm: bpm || null, 
@@ -301,12 +323,11 @@ export default function AddSongPage() {
           </div>
         </div>
 
-       
         {/* Джерело звуку (YouTube) */}
         <div className="flex flex-col gap-2">
           <label className="text-[10px] text-gray-500 ml-1 uppercase tracking-[0.2em] font-bold">Посилання на YouTube</label>
           <input
-            type="text"
+            type="url"
             placeholder="https://www.youtube.com/watch?v=..."
             value={youtubeUrl}
             onChange={(e) => setYoutubeUrl(e.target.value)}
