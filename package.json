@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup": "npm install && allow-scripts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -27,6 +28,7 @@
     "resend": "^6.37.0"
   },
   "devDependencies": {
+    "@lavamoat/allow-scripts": "^5.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.39",
     "@types/react": "^19",
@@ -35,5 +37,11 @@
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "eslint-config-next>eslint-import-resolver-typescript>unrs-resolver#1.12.2": false,
+      "next>sharp#0.34.5": true
+    }
   }
 }
