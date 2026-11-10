@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { searchUserForTeam } from "@/actions/teams";
 
 const ROLE_NAMES: Record<string, string> = {
   leader: "Лідер",
@@ -149,14 +150,20 @@ export default function TeamPage() {
     finally { setCreatingTeam(false); }
   };
 
-  const handleSearchUser = async () => {
+const handleSearchUser = async () => {
     if (!searchEmail.includes("@")) return;
     setInviteStatus("Пошук...");
-    const { data } = await supabase.rpc('get_user_id_by_email', { email_search: searchEmail.trim().toLowerCase() });
+    
+    // Вызываем безопасный серверный экшен вместо прямого rpc
+    const data = await searchUserForTeam(searchEmail.trim().toLowerCase());
+    
     if (data && data.length > 0) {
-      setFoundUser(data[0]); setInviteStatus("");
+      // Так как наша вьюха возвращает { user_id, email }, мапим под нужный формат
+      setFoundUser({ id: data[0].user_id, email: data[0].email }); 
+      setInviteStatus("");
     } else {
-      setFoundUser(null); setInviteStatus("Не знайдено");
+      setFoundUser(null); 
+      setInviteStatus("Не знайдено");
     }
   };
 
@@ -170,7 +177,6 @@ export default function TeamPage() {
       await fetchTeamMembers(team.id);
     }
   };
-
   if (loading && userTeams.length === 0) return <div className="min-h-screen bg-black flex items-center justify-center text-blue-500 font-mono text-xs uppercase tracking-[0.3em]">Завантаження...</div>;
 
   const isOwner = team?.owner_id === userId;
