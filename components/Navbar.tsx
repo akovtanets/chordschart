@@ -172,7 +172,7 @@ export default function Navbar() {
           {/* RIGHT: Menu & Auth */}
           <div className="flex items-center gap-3 md:gap-6 print:hidden flex-shrink-0">
             <nav className="hidden lg:flex items-center gap-6">
-              <Link href="/pricing" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/pricing' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>PRO</Link>
+              {/*<Link href="/pricing" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/pricing' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>PRO</Link>*/}
               <Link href="/songs" className={`text-[13px] font-bold uppercase tracking-wider transition-colors ${pathname === '/songs' ? 'text-[#0090ff]' : 'text-[#666] hover:text-black'}`}>Пісні</Link>
               {user && (
                 <>
